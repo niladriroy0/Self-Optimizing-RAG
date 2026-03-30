@@ -1,15 +1,16 @@
-# llm/model_registry.py
-
 MODEL_REGISTRY = {
-    "fast": "phi3:latest",                  # ultra fast
+    # ⚡ SPEED LAYER
+    "fast": "phi3:latest",
     "cheap": "phi3:latest",
+
+    # ⚖️ BALANCED
     "balanced": "mistral:latest",
 
-    # 🔥 core intelligence layers
-    "reasoning": "deepseek-r1:1.5b",
-    "decomposition": "deepseek-r1:1.5b",
+    # 🧠 INTELLIGENCE LAYERS
+    "reasoning": "qwen2.5:3b",
+    "decomposition": "qwen2.5:3b",
 
-    # 🔥 coding
+    # 💻 CODING
     "coding_light": "deepseek-coder:1.3b",
     "coding_heavy": "deepseek-coder:6.7b"
 }
@@ -39,13 +40,7 @@ MODEL_PROFILES = {
     "qwen2.5:3b": {
         "cost": 2,
         "latency": 2,
-        "reasoning": 4,
-        "coding": 2
-    },
-    "deepseek-r1:1.5b": {
-        "cost": 2,
-        "latency": 3,
-        "reasoning": 5,
+        "reasoning": 5,   # 🔥 BEST reasoning in your stack
         "coding": 2
     },
     "deepseek-coder:1.3b": {
@@ -64,7 +59,31 @@ MODEL_PROFILES = {
 
 
 # ----------------------------------
-# 🔥 DYNAMIC MODEL SELECTION
+# 🔥 TASK → MODEL CATEGORY MAPPING
+# ----------------------------------
+
+def map_task_to_category(task: str):
+
+    if task in ["simple", "fast"]:
+        return "fast"
+
+    if task in ["general", "balanced"]:
+        return "balanced"
+
+    if task in ["reasoning", "complex"]:
+        return "reasoning"
+
+    if task == "decomposition":
+        return "decomposition"
+
+    if task == "coding":
+        return "coding_heavy"
+
+    return "balanced"
+
+
+# ----------------------------------
+# 🔥 SMART MODEL SELECTION (PROFILE-BASED)
 # ----------------------------------
 
 def select_best_model(task: str):
@@ -74,20 +93,52 @@ def select_best_model(task: str):
 
     for model, profile in MODEL_PROFILES.items():
 
+        # --------------------------
+        # TASK-BASED SCORING
+        # --------------------------
+
         if task == "reasoning":
-            score = profile["reasoning"] - profile["latency"]
+            score = (profile["reasoning"] * 2) - profile["latency"]
 
         elif task == "coding":
-            score = profile["coding"] - profile["latency"]
+            score = (profile["coding"] * 2) - profile["latency"]
 
         elif task == "fast":
             score = -profile["latency"]
 
+        elif task == "balanced":
+            score = profile["reasoning"] - (0.5 * profile["latency"])
+
+        elif task == "decomposition":
+            score = (profile["reasoning"] * 2) - profile["latency"]
+
         else:
-            score = profile["reasoning"]
+            score = profile["reasoning"] - profile["latency"]
+
+        # --------------------------
+        # BEST MODEL UPDATE
+        # --------------------------
 
         if score > best_score:
             best_score = score
             best_model = model
 
     return best_model
+
+
+# ----------------------------------
+# 🔥 FINAL ROUTER (USED BY SYSTEM)
+# ----------------------------------
+
+def get_best_model_for_task(task: str):
+
+    # Step 1: Map task → category
+    category = map_task_to_category(task)
+
+    # Step 2: Get default model
+    base_model = get_model(category)
+
+    # Step 3: Override with smarter selection
+    smart_model = select_best_model(task)
+
+    return smart_model or base_model
