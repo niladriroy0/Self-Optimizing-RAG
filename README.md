@@ -120,6 +120,7 @@ If you'd like an in-depth dive into the directories and files, check out our com
 
 - 📖 [`CODEBASE_OVERVIEW.md`](./CODEBASE_OVERVIEW.md) - Detailed breakdown of every file, its functions, and purpose.
 - 🏛️ [`SYSTEM_ARCHITECTURE.md`](./SYSTEM_ARCHITECTURE.md) - High-level system design, data flow, and deployment mapping.
+- 🎓 [`INTERVIEW_GUIDE.md`](./interview_guide.md) - Comprehensive guide on how to pitch and explain this project in interviews.
 
 ## 🚀 Roadmap
 - **Asynchronous Architecture:** Transition offline evaluation and BM25 index rebuilding to message brokers (e.g., Celery/RabbitMQ).
