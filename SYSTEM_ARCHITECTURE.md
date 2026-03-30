@@ -117,7 +117,8 @@ Key steps executed by `rag_pipeline(question)`:
 #### 6. Query Processing (`query_processing/`)
 - **Key Files**:
   - `query_analyzer.py` — Extracts basic features and classifies `type` (coding, reasoning, general) using heuristic keywords.
-  - `query_planner.py` — Handles basic multi-hop decomposition for comparisons and chained queries.
+  - `query_decomposer.py` — Uses an LLM to smartly break down complex queries into sub-questions with string-parsing fallbacks.
+  - `query_planner.py` — Plans if a query should be multi-hop and coordinates decomposition.
 
 #### 7. Evaluation System (`evaluation/`)
 - **Metrics**: Cosine similarity computes `answer_relevance` and `faithfulness` leveraging the centralized embedding service.
@@ -162,7 +163,7 @@ Key steps executed by `rag_pipeline(question)`:
 
 #### 15. User Interface & Dashboards (`ui/`, `dashboard/`)
 - **Streamlit App**: `ui/streamlit_app.py` submits to `http://127.0.0.1:8000/query`.
-- **Dashboard App**: `dashboard/app.py` reads `logs/rag_logs.json` to showcase experiment performance metrics.
+- **Dashboard App**: `dashboard/app.py` reads `experiments.db` (SQLite) to showcase experiment performance metrics.
 
 #### 16. Data Plane (`data_plane/`)
 - **Status**: Completely empty; routing orchestrated mostly within `retrieval/pipeline.py`.

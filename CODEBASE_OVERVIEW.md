@@ -197,12 +197,21 @@
 - **Places to Improve:** Add query rewriting capabilities (expanding abbreviations, correcting typos) to improve retrieval performance.
 - **Need Rating:** 4/5
 
-## `.\query_processing\query_planner.py`
-- **Contains:** Basic multi-hop query decomposition logic.
+## `.\query_processing\query_decomposer.py`
+- **Contains:** LLM-based query decomposition logic with rule-based fallbacks.
 - **Functions:**
-  - `decompose_query`: Analyzes the original query to split it into sub-questions based on delimiters ("compare", "and", "then").
+  - `decompose_query_llm`: Uses an LLM to smartly break down complex queries into sub-questions.
+  - `fallback_decomposition`: Fallback splitting queries mechanically with 'compare', 'and', or 'then'.
+- **Purpose in Application:** Separates independent question elements to optimize hybrid vector-search limits.
+- **Places to Improve:** Expand context-aware rules in the fallback. Refine the LLM prompt.
+- **Need Rating:** 5/5
+
+## `.\query_processing\query_planner.py`
+- **Contains:** Decision logic to coordinate when/if a query should be decomposed.
+- **Functions:**
+  - `plan_query`: Based on the config manager settings and query analysis, decides to return a single query or list of multiple queries.
 - **Purpose in Application:** Crucial for servicing complex requests that require gathering multiple independent sources of evidence before answering.
-- **Places to Improve:** Current implementation rests heavily on hardcoded string parsing. Replace hardcoded rules with a small lightweight LLM or syntactic dependency parser for true decomposition logic.
+- **Places to Improve:** Could allow dynamic execution graph planning.
 - **Need Rating:** 5/5
 
 ## `.\retrieval\hybrid_retriever.py`
