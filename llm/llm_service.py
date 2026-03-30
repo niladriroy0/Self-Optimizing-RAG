@@ -1,8 +1,18 @@
+# llm/llm_service.py
+
 import requests
+
 from llm.prompt_builder import build_prompt
+from control_plane.config_manager import config_manager
+from control_plane.model_router import get_fallback_model
+
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
+
+# ----------------------------------
+# CLEAN OUTPUT
+# ----------------------------------
 
 def clean_output(text: str) -> str:
 
@@ -19,6 +29,10 @@ def clean_output(text: str) -> str:
     return text.strip()
 
 
+# ----------------------------------
+# CODE FORMATTER
+# ----------------------------------
+
 def format_code_block(text: str, query_type: str) -> str:
 
     if query_type != "coding":
@@ -30,14 +44,59 @@ def format_code_block(text: str, query_type: str) -> str:
         text = "```python\n" + text
 
     if not text.endswith("```"):
-        text = text + "\n```"
+        text += "\n```"
 
     return text
 
 
-def generate_answer(context, question, model, query_type=None, query_analysis=None):
+# ----------------------------------
+# CORE LLM CALL
+# ----------------------------------
 
-    # 🔥 BUILD ADVANCED PROMPT
+def _call_llm(model, prompt):
+
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": model,
+            "prompt": prompt,
+            "stream": False
+        },
+        timeout=120
+    )
+
+    result = response.json()
+
+    return result.get("response", "")
+
+
+# ----------------------------------
+# SIMPLE CONFIDENCE HEURISTIC
+# ----------------------------------
+
+def estimate_confidence(answer: str) -> float:
+
+    if not answer or len(answer) < 20:
+        return 0.3
+
+    if "I don't know" in answer:
+        return 0.2
+
+    return 0.7
+
+
+# ----------------------------------
+# MAIN ENTRY (WITH FALLBACK)
+# ----------------------------------
+
+def generate_answer(
+    context,
+    question,
+    model,
+    query_type=None,
+    query_analysis=None
+):
+
     prompt = build_prompt(
         context=context,
         question=question,
@@ -47,26 +106,39 @@ def generate_answer(context, question, model, query_type=None, query_analysis=No
 
     try:
 
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False
-            },
-            timeout=12000
-        )
+        # --------------------------
+        # PRIMARY CALL
+        # --------------------------
 
-        result = response.json()
-
-        answer = result.get("response", "No response from model")
-
-        # 🔥 CLEAN + FORMAT
+        answer = _call_llm(model, prompt)
         answer = clean_output(answer)
+
+        confidence = estimate_confidence(answer)
+
+        # --------------------------
+        # 🔥 FALLBACK LOGIC
+        # --------------------------
+
+        if config_manager.get_param("enable_fallback", True):
+
+            threshold = config_manager.get_param("confidence_threshold", 0.6)
+
+            if confidence < threshold:
+
+                fallback_model = get_fallback_model(query_analysis)
+
+                fallback_answer = _call_llm(fallback_model, prompt)
+                fallback_answer = clean_output(fallback_answer)
+
+                answer = fallback_answer
+
+        # --------------------------
+        # FORMAT
+        # --------------------------
+
         answer = format_code_block(answer, query_type)
 
         return answer
 
     except Exception as e:
-
         return f"LLM Error: {str(e)}"
