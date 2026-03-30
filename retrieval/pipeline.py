@@ -7,7 +7,7 @@ from llm.llm_service import generate_answer
 
 from optimization.optimizer import choose_config
 from query_processing.query_analyzer import analyze_query
-from query_processing.query_planner import decompose_query
+from query_processing.query_planner import plan_query  # ✅ UPDATED
 
 from control_plane.model_router import route_model_with_exploration
 from control_plane.knowledge_router import route_knowledge
@@ -24,10 +24,11 @@ from evaluation.rag_evaluator import evaluate_rag
 
 
 # ----------------------------------
-# Utility
+# UTILITY
 # ----------------------------------
 
 def normalize_documents(retrieved_docs):
+
     clean_docs = []
 
     for doc in retrieved_docs:
@@ -62,12 +63,11 @@ def rag_pipeline(question):
     query_analysis = analyze_query(question)
 
     # ----------------------------------
-    # 🔥 CACHE (PURE FAST PATH)
+    # CACHE (FAST PATH)
     # ----------------------------------
 
     if query_analysis.get("type") != "coding" and config_cp.get("enable_query_cache", True):
         cached = get_cached(question)
-
         if cached:
             print("⚡ Cache Hit → returning directly")
             return cached
@@ -135,39 +135,41 @@ def rag_pipeline(question):
     print("Control Plane Config:", config_cp)
 
     # ----------------------------------
+    # QUERY PLANNING (🔥 NEW CORE)
+    # ----------------------------------
+
+    sub_queries = plan_query(question, query_analysis)
+
+    if len(sub_queries) > 1:
+        print("🔀 Multi-hop queries:", sub_queries)
+
+    # ----------------------------------
     # RETRIEVAL
     # ----------------------------------
 
     tracker.start("retrieval")
 
-    if config_cp.get("enable_multi_hop", True) and query_analysis.get("is_multi_hop"):
+    all_docs = []
 
-        sub_queries = decompose_query(question)
-        print("🔀 Multi-hop queries:", sub_queries)
-
-        all_docs = []
-
-        for sub_q in sub_queries:
-            docs = hybrid_search(sub_q)
-            docs = normalize_documents(docs)
-            all_docs.extend(docs)
-
-        retrieved_docs = all_docs
-
-    else:
-        retrieved_docs = hybrid_search(question)
-        retrieved_docs = normalize_documents(retrieved_docs)
+    for sub_q in sub_queries:
+        docs = hybrid_search(
+            sub_q,
+            query_analysis=query_analysis,   # 🔥 IMPORTANT
+            top_k=top_k
+        )
+        docs = normalize_documents(docs)
+        all_docs.extend(docs)
 
     tracker.end("retrieval")
 
-    if not retrieved_docs:
+    if not all_docs:
         return "No relevant documents found.", {}
 
     # ----------------------------------
     # REMOVE DUPLICATES
     # ----------------------------------
 
-    retrieved_docs = list(dict.fromkeys(retrieved_docs))
+    retrieved_docs = list(dict.fromkeys(all_docs))
 
     # ----------------------------------
     # RERANKING
@@ -175,10 +177,7 @@ def rag_pipeline(question):
 
     tracker.start("rerank")
 
-    rerank_query = question
-
-    if query_analysis.get("is_multi_hop"):
-        rerank_query = " ".join(decompose_query(question))
+    rerank_query = " ".join(sub_queries) if len(sub_queries) > 1 else question
 
     reranked = rerank(rerank_query, retrieved_docs)
     clean_reranked = [(doc, float(score)) for doc, score in reranked]
@@ -190,21 +189,18 @@ def rag_pipeline(question):
     final_docs = reranked_docs[:top_k]
 
     # ----------------------------------
-    # 🔥 MEMORY (INTERNAL RAG)
+    # MEMORY
     # ----------------------------------
 
     memory_context = retrieve_memory(question)
 
     # ----------------------------------
-    # 🔥 CONTEXT FUSION (CLEAN)
+    # CONTEXT FUSION
     # ----------------------------------
 
     context_parts = []
 
-    # 1. Memory (learned knowledge)
     context_parts.extend(memory_context[:2])
-
-    # 2. Retrieval (ground truth)
     context_parts.extend(final_docs)
 
     context = "\n".join(context_parts)
@@ -231,7 +227,7 @@ def rag_pipeline(question):
     tracker.end("llm")
 
     # ----------------------------------
-    # 🔥 EVALUATION + CONFIDENCE
+    # EVALUATION + CONFIDENCE
     # ----------------------------------
 
     evaluation_scores = evaluate_rag(question, answer, context)
@@ -245,13 +241,13 @@ def rag_pipeline(question):
     )
 
     # ----------------------------------
-    # 🔥 STORE MEMORY (SYNC — IMPORTANT)
+    # MEMORY STORE
     # ----------------------------------
 
     store_memory(question, answer, confidence)
 
     # ----------------------------------
-    # 🔥 ASYNC WORKER (LOGGING ONLY)
+    # ASYNC LOGGING
     # ----------------------------------
 
     run_evaluation_async(
@@ -276,7 +272,8 @@ def rag_pipeline(question):
         "control_plane_config": config_cp,
         "retrieval": {
             "total_docs": len(retrieved_docs),
-            "top_k": top_k
+            "top_k": top_k,
+            "sub_queries": sub_queries
         },
         "memory_used": len(memory_context),
         "confidence": confidence,
