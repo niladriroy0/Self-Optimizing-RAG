@@ -7,42 +7,72 @@ def compute_confidence(
     top_k: int,
     memory_context: List[str],
     query_analysis: Dict,
-    evaluation_scores: Dict = None
+    evaluation_scores: Dict = None,
+    answer: str = None   # 🔥 NEW
 ) -> float:
     """
-    Balanced + Mode-Aware Confidence Model
+    Advanced Confidence Model
 
     Handles:
-    - RAG / HYBRID (retrieval-based)
-    - LLM_ONLY (fallback confidence)
+    - RAG / HYBRID
+    - LLM_ONLY (content-aware)
     """
 
     # ----------------------------------
-    # 🔥 LLM_ONLY FALLBACK (IMPORTANT)
+    # 🔥 LLM_ONLY MODE (CONTENT-AWARE)
     # ----------------------------------
     if not clean_reranked:
 
-        base_conf = 0.65
+        answer = answer or ""
 
-        # 🔥 Coding queries are more reliable
+        base_conf = 0.6
+
+        # --------------------------
+        # TYPE BOOST
+        # --------------------------
         if query_analysis.get("type") == "coding":
-            base_conf = 0.75
+            base_conf += 0.15
 
+        # --------------------------
+        # LENGTH SIGNAL
+        # --------------------------
+        if len(answer) > 200:
+            base_conf += 0.1
+        elif len(answer) < 50:
+            base_conf -= 0.2
+
+        # --------------------------
+        # STRUCTURE SIGNAL
+        # --------------------------
+        if "def " in answer or "class " in answer:
+            base_conf += 0.1
+
+        if "\n" in answer:
+            base_conf += 0.05
+
+        # --------------------------
+        # BAD SIGNALS
+        # --------------------------
+        if "I don't know" in answer or "not sure" in answer:
+            base_conf -= 0.4
+
+        # --------------------------
+        # EVALUATION BOOST
+        # --------------------------
         if evaluation_scores:
             faithfulness = evaluation_scores.get("faithfulness", 0)
             relevance = evaluation_scores.get("answer_relevance", 0)
 
             eval_score = (faithfulness + relevance) / 2
 
-            confidence = (base_conf * 0.6) + (eval_score * 0.4)
-        else:
-            confidence = base_conf
+            base_conf = (base_conf * 0.6) + (eval_score * 0.4)
 
-        return max(0.0, min(confidence, 1.0))
+        return max(0.0, min(base_conf, 1.0))
 
     # ----------------------------------
-    # RETRIEVAL SCORE (RAW AVG + SIGMOID)
+    # 🔍 RAG MODE (RETRIEVAL BASED)
     # ----------------------------------
+
     scores = [score for _, score in clean_reranked[:top_k]]
     avg_score = sum(scores) / len(scores)
 
@@ -75,7 +105,7 @@ def compute_confidence(
 
         eval_score = (faithfulness + relevance) / 2
 
-        eval_weight = 0.25  # balanced influence
+        eval_weight = 0.25
         confidence = (confidence * (1 - eval_weight)) + (eval_score * eval_weight)
 
     # ----------------------------------
@@ -84,7 +114,7 @@ def compute_confidence(
     confidence = max(0.0, min(confidence, 1.0))
 
     # ----------------------------------
-    # 🔥 NON-LINEAR SMOOTHING
+    # 🔥 SMOOTHING
     # ----------------------------------
     confidence = math.sqrt(confidence)
 
@@ -92,7 +122,4 @@ def compute_confidence(
         1 / (1 + math.exp(-3 * (confidence - 0.5)))
     )
 
-    # ----------------------------------
-    # FINAL CLAMP
-    # ----------------------------------
     return max(0.0, min(confidence, 1.0))
