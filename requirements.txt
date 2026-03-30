@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+openai
+chromadb
+pydantic
+python-dotenv
+tiktoken
+sentence-transformers
+rank-bm25
+scikit-learn
+streamlit
+requests

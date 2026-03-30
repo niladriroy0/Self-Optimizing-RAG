@@ -1,0 +1,3 @@
+Transformers are neural network architectures used in NLP.
+They rely on attention mechanisms to process sequences of data.
+Self-attention allows transformers to capture relationships between distant words.

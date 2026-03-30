@@ -1,0 +1,385 @@
+{
+  ".\\api\\routes\\query_routes.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "stream_response",
+        "docstring": null
+      },
+      {
+        "name": "query",
+        "docstring": null
+      },
+      {
+        "name": "rebuild_index",
+        "docstring": null
+      },
+      {
+        "name": "feedback",
+        "docstring": null
+      }
+    ],
+    "loc": 54
+  },
+  ".\\app\\main.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "lifespan",
+        "docstring": null
+      },
+      {
+        "name": "health",
+        "docstring": null
+      }
+    ],
+    "loc": 35
+  },
+  ".\\cache\\memory_store.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "store_memory",
+        "docstring": null
+      },
+      {
+        "name": "verify_memory",
+        "docstring": null
+      },
+      {
+        "name": "retrieve_memory",
+        "docstring": null
+      }
+    ],
+    "loc": 54
+  },
+  ".\\cache\\query_cache.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "get_cache_key",
+        "docstring": null
+      },
+      {
+        "name": "get_cached",
+        "docstring": null
+      },
+      {
+        "name": "set_cache",
+        "docstring": null
+      }
+    ],
+    "loc": 17
+  },
+  ".\\cache\\redis_cache.py": {
+    "type": "python",
+    "functions": [],
+    "loc": 0
+  },
+  ".\\control_plane\\knowledge_router.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "route_knowledge",
+        "docstring": null
+      }
+    ],
+    "loc": 40
+  },
+  ".\\control_plane\\model_router.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "extract_features",
+        "docstring": null
+      },
+      {
+        "name": "score_model",
+        "docstring": null
+      },
+      {
+        "name": "route_model_advanced",
+        "docstring": null
+      },
+      {
+        "name": "route_model_with_exploration",
+        "docstring": null
+      }
+    ],
+    "loc": 86
+  },
+  ".\\dashboard\\app.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "load_data",
+        "docstring": null
+      }
+    ],
+    "loc": 35
+  },
+  ".\\embeddings\\embedding_service.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "embed_text",
+        "docstring": null
+      }
+    ],
+    "loc": 6
+  },
+  ".\\evaluation\\rag_evaluator.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "evaluate_rag",
+        "docstring": null
+      }
+    ],
+    "loc": 22
+  },
+  ".\\ingestion\\chunker.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "chunk_document",
+        "docstring": null
+      }
+    ],
+    "loc": 10
+  },
+  ".\\llm\\llm_service.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "clean_output",
+        "docstring": null
+      },
+      {
+        "name": "format_code_block",
+        "docstring": null
+      },
+      {
+        "name": "generate_answer",
+        "docstring": null
+      }
+    ],
+    "loc": 72
+  },
+  ".\\llm\\model_registry.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "get_model",
+        "docstring": null
+      }
+    ],
+    "loc": 49
+  },
+  ".\\llm\\prompt_builder.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "trim_context",
+        "docstring": null
+      },
+      {
+        "name": "get_verbosity",
+        "docstring": null
+      },
+      {
+        "name": "build_code_prompt",
+        "docstring": null
+      },
+      {
+        "name": "build_rag_prompt",
+        "docstring": null
+      },
+      {
+        "name": "build_general_prompt",
+        "docstring": null
+      },
+      {
+        "name": "build_json_prompt",
+        "docstring": null
+      },
+      {
+        "name": "build_prompt",
+        "docstring": null
+      }
+    ],
+    "loc": 202
+  },
+  ".\\observability\\cost_tracker.py": {
+    "type": "python",
+    "functions": [],
+    "loc": 0
+  },
+  ".\\observability\\latency_tracker.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "__init__",
+        "docstring": null
+      },
+      {
+        "name": "start",
+        "docstring": null
+      },
+      {
+        "name": "end",
+        "docstring": null
+      },
+      {
+        "name": "get_all",
+        "docstring": null
+      }
+    ],
+    "loc": 16
+  },
+  ".\\optimization\\experiment_db.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "init_db",
+        "docstring": null
+      },
+      {
+        "name": "log_experiment",
+        "docstring": null
+      },
+      {
+        "name": "get_best_config",
+        "docstring": null
+      }
+    ],
+    "loc": 66
+  },
+  ".\\optimization\\optimizer.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "choose_config",
+        "docstring": null
+      },
+      {
+        "name": "adapt_config",
+        "docstring": null
+      }
+    ],
+    "loc": 30
+  },
+  ".\\query_processing\\query_analyzer.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "analyze_query",
+        "docstring": null
+      }
+    ],
+    "loc": 20
+  },
+  ".\\retrieval\\hybrid_retriever.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "hybrid_search",
+        "docstring": null
+      }
+    ],
+    "loc": 16
+  },
+  ".\\retrieval\\keyword_retriever.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "build_index",
+        "docstring": null
+      },
+      {
+        "name": "rebuild_from_chroma",
+        "docstring": null
+      },
+      {
+        "name": "keyword_search",
+        "docstring": null
+      }
+    ],
+    "loc": 39
+  },
+  ".\\retrieval\\pipeline.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "normalize_documents",
+        "docstring": null
+      },
+      {
+        "name": "compute_confidence",
+        "docstring": null
+      },
+      {
+        "name": "rag_pipeline",
+        "docstring": null
+      }
+    ],
+    "loc": 273
+  },
+  ".\\retrieval\\reranker.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "rerank",
+        "docstring": null
+      }
+    ],
+    "loc": 23
+  },
+  ".\\scripts\\ingest_documents.py": {
+    "type": "python",
+    "functions": [],
+    "loc": 34
+  },
+  ".\\ui\\streamlit_app.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "render_answer",
+        "docstring": null
+      },
+      {
+        "name": "normalize",
+        "docstring": null
+      }
+    ],
+    "loc": 222
+  },
+  ".\\vectorstore\\chroma_store.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "add_documents",
+        "docstring": null
+      },
+      {
+        "name": "search_documents",
+        "docstring": null
+      }
+    ],
+    "loc": 32
+  },
+  ".\\workers\\evaluation_worker.py": {
+    "type": "python",
+    "functions": [
+      {
+        "name": "run_evaluation_async",
+        "docstring": null
+      },
+      {
+        "name": "task",
+        "docstring": null
+      }
+    ],
+    "loc": 38
+  }
+}
