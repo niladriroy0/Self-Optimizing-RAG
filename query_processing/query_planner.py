@@ -1,40 +1,34 @@
+# query_processing/query_planner.py
+
 from typing import List
 
+from query_processing.query_decomposer import decompose_query_llm
+from control_plane.config_manager import config_manager
 
-def decompose_query(query: str) -> List[str]:
+
+def plan_query(query: str, analysis: dict) -> List[str]:
     """
-    Basic multi-hop decomposition
-
-    Handles:
-    - comparisons
-    - multi-part questions
-    - chained queries
+    Decides:
+    - single query
+    - or decomposed queries
     """
 
-    q = query.lower()
+    enable_multi_hop = config_manager.get_param("enable_multi_hop", True)
+    enable_decomposition = config_manager.get_param("enable_decomposition", True)
 
     # ----------------------------------
-    # 1. Comparison queries
+    # MULTI-HOP DECISION
     # ----------------------------------
-    if "compare" in q or "difference between" in q:
-        parts = query.replace("compare", "").split("and")
-        return [p.strip() for p in parts if p.strip()]
+
+    if (
+        enable_multi_hop
+        and enable_decomposition
+        and analysis.get("is_multi_hop", False)
+    ):
+        return decompose_query_llm(query)
 
     # ----------------------------------
-    # 2. Multi-part queries
+    # SINGLE QUERY
     # ----------------------------------
-    if " and " in q:
-        parts = query.split(" and ")
-        return [p.strip() for p in parts if p.strip()]
 
-    # ----------------------------------
-    # 3. Sequential reasoning
-    # ----------------------------------
-    if " then " in q:
-        parts = query.split(" then ")
-        return [p.strip() for p in parts if p.strip()]
-
-    # ----------------------------------
-    # Default → single query
-    # ----------------------------------
     return [query]
