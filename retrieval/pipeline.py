@@ -237,7 +237,8 @@ def rag_pipeline(question):
         top_k,
         memory_context,
         query_analysis,
-        evaluation_scores
+        evaluation_scores,
+        answer=answer   # 🔥 PASSING ANSWER TO CONFIDENCE MODEL
     )
 
     # ----------------------------------
