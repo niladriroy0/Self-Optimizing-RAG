@@ -1,10 +1,13 @@
+# control_plane/model_router.py
+
 import random
+
 from llm.model_registry import MODEL_PROFILES, get_best_model_for_task
 from control_plane.config_manager import config_manager
 
 
 # ----------------------------------
-# 🔥 FEATURE EXTRACTION (UPGRADED)
+# 🔥 FEATURE EXTRACTION
 # ----------------------------------
 
 def extract_features(query_analysis):
@@ -20,6 +23,7 @@ def extract_features(query_analysis):
     return {
         "length": query_analysis.get("length", 0),
         "type": query_analysis.get("type", "general"),
+
         "has_code": int("def" in text or "{" in text or "class" in text),
 
         "complexity_score": complexity_map.get(
@@ -38,14 +42,58 @@ def extract_features(query_analysis):
             query_analysis.get("type") == "coding"
         ),
 
-        # 🔥 NEW (HYBRID AWARE)
         "needs_keyword": int(query_analysis.get("needs_keyword", False)),
         "needs_semantic": int(query_analysis.get("needs_semantic", True)),
     }
 
 
 # ----------------------------------
-# 🔥 MODEL SCORING (IMPROVED)
+# 🔥 SMART SPLIT ROUTING (CORE)
+# ----------------------------------
+
+def route_by_task(query_analysis):
+
+    q_type = query_analysis.get("type")
+    complexity = query_analysis.get("complexity")
+
+    # ----------------------------------
+    # 💻 CODING ROUTING (HIGHEST PRIORITY)
+    # ----------------------------------
+
+    if q_type == "coding":
+
+        if complexity == "low":
+            return "deepseek-coder:1.3b"
+
+        if complexity == "high":
+            return "deepseek-coder:6.7b"
+
+        # medium fallback
+        return "deepseek-coder:1.3b"
+
+    # ----------------------------------
+    # ⚡ FAST PATH (SIMPLE QUERIES)
+    # ----------------------------------
+
+    if (
+        complexity == "low"
+        and not query_analysis.get("is_multi_hop", False)
+        and q_type != "reasoning"
+    ):
+        return "phi3:latest"
+
+    # ----------------------------------
+    # 🧠 REASONING
+    # ----------------------------------
+
+    if q_type == "reasoning" or query_analysis.get("is_multi_hop"):
+        return "qwen2.5:3b"
+
+    return None  # fallback to scoring
+
+
+# ----------------------------------
+# 🔥 MODEL SCORING (FALLBACK)
 # ----------------------------------
 
 def score_model(model_name, features):
@@ -54,40 +102,48 @@ def score_model(model_name, features):
 
     score = 0
 
-    # --------------------------
-    # CORE TASK ALIGNMENT
-    # --------------------------
+    # ----------------------------------
+    # CODING PRIORITY
+    # ----------------------------------
 
-    score += profile["reasoning"] * features["requires_reasoning"]
-    score += profile["coding"] * (
-        features["has_code"] + features["requires_coding"]
-    )
+    if features["requires_coding"]:
+        score += 2.5 * profile["coding"]
+        score += 0.5 * profile["reasoning"]
+    else:
+        score += profile["reasoning"] * features["requires_reasoning"]
 
-    # --------------------------
-    # COMPLEXITY HANDLING
-    # --------------------------
+    # ----------------------------------
+    # COMPLEXITY
+    # ----------------------------------
 
     score += features["complexity_score"] * profile["reasoning"]
 
-    # --------------------------
-    # AMBIGUITY HANDLING
-    # --------------------------
+    # ----------------------------------
+    # AMBIGUITY
+    # ----------------------------------
 
     score += features["ambiguity"] * profile["reasoning"]
 
-    # --------------------------
-    # HYBRID SIGNAL BOOST
-    # --------------------------
+    # ----------------------------------
+    # CODE SIGNAL
+    # ----------------------------------
+
+    if features["has_code"]:
+        score += 1.5 * profile["coding"]
+
+    # ----------------------------------
+    # HYBRID BOOST
+    # ----------------------------------
 
     if features["needs_semantic"]:
         score += 0.5 * profile["reasoning"]
 
-    # --------------------------
+    # ----------------------------------
     # PENALTIES
-    # --------------------------
+    # ----------------------------------
 
-    score -= 0.3 * profile["cost"]
-    score -= 0.2 * profile["latency"]
+    score -= 0.25 * profile["cost"]
+    score -= 0.15 * profile["latency"]
 
     return score
 
@@ -98,11 +154,27 @@ def score_model(model_name, features):
 
 def route_model_advanced(query_analysis):
 
-    # 🔥 CONFIG OVERRIDE (CONTROL PLANE POWER)
+    # ----------------------------------
+    # 🎛 CONTROL PLANE OVERRIDE
+    # ----------------------------------
+
     forced_model = config_manager.get_param("model")
 
     if forced_model in MODEL_PROFILES:
         return forced_model
+
+    # ----------------------------------
+    # 🔥 TASK-BASED ROUTING FIRST
+    # ----------------------------------
+
+    task_model = route_by_task(query_analysis)
+
+    if task_model:
+        return task_model
+
+    # ----------------------------------
+    # 🔁 FALLBACK TO SCORING
+    # ----------------------------------
 
     features = extract_features(query_analysis)
 
@@ -120,7 +192,7 @@ def route_model_advanced(query_analysis):
 
 
 # ----------------------------------
-# 🔥 EXPLORATION (SELF-OPTIMIZATION)
+# 🔥 EXPLORATION (SELF-LEARNING)
 # ----------------------------------
 
 def route_model_with_exploration(query_analysis, epsilon=0.1):
@@ -134,26 +206,16 @@ def route_model_with_exploration(query_analysis, epsilon=0.1):
 
 
 # ----------------------------------
-# 🔥 FAST → REASONING FALLBACK DECISION
+# 🔥 PRIMARY MODEL (PIPELINE ENTRY)
 # ----------------------------------
 
-def should_use_fast_path(query_analysis):
-
-    return (
-        query_analysis.get("complexity") == "low"
-        and not query_analysis.get("is_multi_hop", False)
-    )
-
-
 def get_primary_model(query_analysis):
-
-    if should_use_fast_path(query_analysis):
-        return get_best_model_for_task("fast")
-
     return route_model_advanced(query_analysis)
 
 
-def get_fallback_model(query_analysis):
+# ----------------------------------
+# 🔥 FALLBACK MODEL (STRONG REASONING)
+# ----------------------------------
 
-    # Always use strong reasoning fallback
+def get_fallback_model(query_analysis):
     return get_best_model_for_task("reasoning")
