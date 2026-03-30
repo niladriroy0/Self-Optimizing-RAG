@@ -7,7 +7,7 @@ from llm.llm_service import generate_answer
 
 from optimization.optimizer import choose_config
 from query_processing.query_analyzer import analyze_query
-from query_processing.query_planner import plan_query  # ✅ UPDATED
+from query_processing.query_planner import plan_query
 
 from control_plane.model_router import route_model_with_exploration
 from control_plane.knowledge_router import route_knowledge
@@ -63,7 +63,7 @@ def rag_pipeline(question):
     query_analysis = analyze_query(question)
 
     # ----------------------------------
-    # CACHE (FAST PATH)
+    # CACHE
     # ----------------------------------
 
     if query_analysis.get("type") != "coding" and config_cp.get("enable_query_cache", True):
@@ -87,7 +87,7 @@ def rag_pipeline(question):
     print("Knowledge Mode:", mode)
 
     # ----------------------------------
-    # LLM ONLY MODE
+    # 🔥 LLM ONLY MODE (FIXED)
     # ----------------------------------
 
     if mode == "LLM_ONLY":
@@ -104,6 +104,16 @@ def rag_pipeline(question):
 
         tracker.end("llm")
 
+        # ✅ FIX: compute real confidence
+        confidence = compute_confidence(
+            clean_reranked=[],
+            top_k=0,
+            memory_context=[],
+            query_analysis=query_analysis,
+            evaluation_scores=None,
+            answer=answer
+        )
+
         total_latency = time.time() - start_time
 
         observability = {
@@ -114,7 +124,7 @@ def rag_pipeline(question):
                 **tracker.get_all(),
                 "total_seconds": total_latency
             },
-            "confidence": 0.4
+            "confidence": confidence
         }
 
         final_response = (answer, observability)
@@ -135,7 +145,7 @@ def rag_pipeline(question):
     print("Control Plane Config:", config_cp)
 
     # ----------------------------------
-    # QUERY PLANNING (🔥 NEW CORE)
+    # QUERY PLANNING
     # ----------------------------------
 
     sub_queries = plan_query(question, query_analysis)
@@ -154,7 +164,7 @@ def rag_pipeline(question):
     for sub_q in sub_queries:
         docs = hybrid_search(
             sub_q,
-            query_analysis=query_analysis,   # 🔥 IMPORTANT
+            query_analysis=query_analysis,
             top_k=top_k
         )
         docs = normalize_documents(docs)
@@ -166,13 +176,13 @@ def rag_pipeline(question):
         return "No relevant documents found.", {}
 
     # ----------------------------------
-    # REMOVE DUPLICATES
+    # DEDUP
     # ----------------------------------
 
     retrieved_docs = list(dict.fromkeys(all_docs))
 
     # ----------------------------------
-    # RERANKING
+    # RERANK
     # ----------------------------------
 
     tracker.start("rerank")
@@ -195,11 +205,10 @@ def rag_pipeline(question):
     memory_context = retrieve_memory(question)
 
     # ----------------------------------
-    # CONTEXT FUSION
+    # CONTEXT
     # ----------------------------------
 
     context_parts = []
-
     context_parts.extend(memory_context[:2])
     context_parts.extend(final_docs)
 
@@ -238,7 +247,7 @@ def rag_pipeline(question):
         memory_context,
         query_analysis,
         evaluation_scores,
-        answer=answer   # 🔥 PASSING ANSWER TO CONFIDENCE MODEL
+        answer=answer   # 🔥 already correct
     )
 
     # ----------------------------------
@@ -288,7 +297,7 @@ def rag_pipeline(question):
     final_response = (answer, observability)
 
     # ----------------------------------
-    # CACHE STORE
+    # CACHE
     # ----------------------------------
 
     if query_analysis.get("type") != "coding":
