@@ -4,23 +4,11 @@ from typing import Dict, Any
 
 
 class ConfigManager:
-    """
-    Central Control Plane Configuration Manager
-
-    Responsibilities:
-    - Maintain current active config
-    - Provide read access across system
-    - Allow safe updates (thread-safe)
-    - Track config versioning (basic)
-    """
 
     _instance = None
     _lock = threading.Lock()
 
     def __new__(cls):
-        """
-        Singleton pattern to ensure one global config state
-        """
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -31,22 +19,51 @@ class ConfigManager:
     def _init_config(self):
         self._config_lock = threading.Lock()
 
-        # 🔥 Default system config (VERY IMPORTANT)
+        # 🔥 FINAL SYSTEM CONFIG
         self._config: Dict[str, Any] = {
+
+            # -----------------------
+            # RETRIEVAL
+            # -----------------------
             "top_k": 5,
-            "model": None,
             "use_reranker": True,
             "reranker_top_k": 20,
-            "prompt_template": "default",
             "chunk_size": 500,
+
+            # -----------------------
+            # MODEL CONTROL
+            # -----------------------
+            "model": None,
             "temperature": 0.2,
             "max_tokens": 512,
+
+            # -----------------------
+            # INTELLIGENCE FEATURES
+            # -----------------------
             "enable_multi_hop": True,
+            "enable_decomposition": True,   # 🔥 NEW
+            "enable_fallback": True,        # 🔥 NEW
+
+            # -----------------------
+            # HYBRID RETRIEVAL
+            # -----------------------
+            "enable_hybrid": True,
+            "keyword_weight": 0.5,
+            "semantic_weight": 0.5,
+
+            # -----------------------
+            # MEMORY / CACHE
+            # -----------------------
             "enable_query_cache": True,
-            "confidence_threshold": 0.5,
+            "enable_memory": True,
+            "confidence_threshold": 0.6,
+
+            # -----------------------
+            # OBSERVABILITY
+            # -----------------------
+            "enable_logging": True,
         }
 
-        # Version tracking (for experiments)
         self._version = 1
 
     # -------------------------------
@@ -54,16 +71,10 @@ class ConfigManager:
     # -------------------------------
 
     def get_config(self) -> Dict[str, Any]:
-        """
-        Returns a safe copy of config
-        """
         with self._config_lock:
             return copy.deepcopy(self._config)
 
     def get_param(self, key: str, default=None):
-        """
-        Get single parameter
-        """
         with self._config_lock:
             return self._config.get(key, default)
 
@@ -75,46 +86,25 @@ class ConfigManager:
     # -------------------------------
 
     def update_config(self, new_config: Dict[str, Any]):
-        """
-        Update multiple config values safely
-        """
         with self._config_lock:
             self._config.update(new_config)
             self._version += 1
 
     def set_param(self, key: str, value: Any):
-        """
-        Update single parameter
-        """
         with self._config_lock:
             self._config[key] = value
             self._version += 1
 
     def reset_config(self):
-        """
-        Reset to default config
-        """
         with self._config_lock:
             self._init_config()
 
     # -------------------------------
-    # DEBUG / OBSERVABILITY
+    # SMART UPDATE (NO NOISE)
     # -------------------------------
 
-    def dump_config(self) -> Dict[str, Any]:
-        """
-        Returns config with version (useful for logging)
-        """
-        with self._config_lock:
-            return {
-                "version": self._version,
-                "config": copy.deepcopy(self._config)
-            }
-
     def smart_update(self, new_config: Dict[str, Any]):
-        """
-        Update only if values actually change
-        """
+
         with self._config_lock:
             updated = False
 
@@ -126,5 +116,18 @@ class ConfigManager:
             if updated:
                 self._version += 1
 
-# 🔥 Global access point (IMPORTANT)
+    # -------------------------------
+    # DEBUG / OBSERVABILITY
+    # -------------------------------
+
+    def dump_config(self) -> Dict[str, Any]:
+
+        with self._config_lock:
+            return {
+                "version": self._version,
+                "config": copy.deepcopy(self._config)
+            }
+
+
+# 🔥 GLOBAL INSTANCE
 config_manager = ConfigManager()
