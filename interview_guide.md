@@ -1,6 +1,6 @@
 # 🚀 Self-Optimizing RAG: Interview Guide
 
-This guide is designed to help you explain your project to hiring managers and technical recruiters, specifically highlighting why it’s more advanced than a standard RAG implementation.
+This guide is designed to help you explain this project to hiring managers and technical recruiters, specifically highlighting why it’s more advanced than a standard RAG implementation.
 
 ---
 
