@@ -240,12 +240,12 @@ User submits query (UI / API)
 │  │ chroma_store│    │ keyword_retriever.py │ │
 │  │ (Vector k-NN│    │ (BM25 keyword search)│ │
 │  └─────────────┘    └──────────────────────┘ │
-│              ↘          ↙                    │
+│              ↘          ↙                   │
 │          hybrid_retriever.py                 │
-│          (Merge + Deduplicate)                │
+│          (Merge + Deduplicate)               │
 │                  ↓                           │
 │           reranker.py                        │
-│           (Cross-Encoder scoring)             │
+│           (Cross-Encoder scoring)            │
 └──────────────────────────────────────────────┘
          │
          ▼
