@@ -131,6 +131,8 @@ def rag_pipeline(question):
 
         if query_analysis.get("type") != "coding":
             set_cache(question, final_response)
+            
+        store_memory(question, answer, confidence)
 
         return final_response
 
