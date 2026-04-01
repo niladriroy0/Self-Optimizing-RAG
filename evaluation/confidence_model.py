@@ -8,7 +8,7 @@ def compute_confidence(
     memory_context: List[str],
     query_analysis: Dict,
     evaluation_scores: Dict = None,
-    answer: str = None   # 🔥 NEW
+    answer: str = None
 ) -> float:
     """
     Advanced Confidence Model
@@ -25,39 +25,38 @@ def compute_confidence(
 
         answer = answer or ""
 
-        base_conf = 0.6
+        base_conf = 0.5  # Start lower. A purely LLM response without retrieval is inherently uncertain.
 
         # --------------------------
-        # TYPE BOOST
+        # BAD SIGNALS
         # --------------------------
-        if query_analysis.get("type") == "coding":
-            base_conf += 0.15
+        answer_lower = answer.lower()
+        if "i don't know" in answer_lower or "not sure" in answer_lower or "as an ai" in answer_lower:
+            base_conf -= 0.5
 
         # --------------------------
         # LENGTH SIGNAL
         # --------------------------
-        if len(answer) > 200:
-            base_conf += 0.1
-        elif len(answer) < 50:
+        if len(answer) < 50:
             base_conf -= 0.2
 
-        # --------------------------
-        # STRUCTURE SIGNAL
-        # --------------------------
-        if "def " in answer or "class " in answer:
+        if len(answer) > 200:
             base_conf += 0.1
+
+        # --------------------------
+        # TYPE BOOST & STRUCTURE
+        # --------------------------
+        if query_analysis.get("type") == "coding":
+            if "def " in answer or "class " in answer or "```" in answer:
+                base_conf += 0.2
+            else:
+                base_conf -= 0.3  # Penalize if it claims to be coding but lacks code structure
 
         if "\n" in answer:
             base_conf += 0.05
 
         # --------------------------
-        # BAD SIGNALS
-        # --------------------------
-        if "I don't know" in answer or "not sure" in answer:
-            base_conf -= 0.4
-
-        # --------------------------
-        # EVALUATION BOOST
+        # EVALUATION INTEGRATION
         # --------------------------
         if evaluation_scores:
             faithfulness = evaluation_scores.get("faithfulness", 0)
@@ -65,7 +64,9 @@ def compute_confidence(
 
             eval_score = (faithfulness + relevance) / 2
 
-            base_conf = (base_conf * 0.6) + (eval_score * 0.4)
+            # Use evaluation as a strict multiplier. 
+            # If the eval score is terrible (e.g. 0.2), confidence drops by 80%.
+            base_conf = base_conf * eval_score
 
         return max(0.0, min(base_conf, 1.0))
 
@@ -74,7 +75,11 @@ def compute_confidence(
     # ----------------------------------
 
     scores = [score for _, score in clean_reranked[:top_k]]
-    avg_score = sum(scores) / len(scores)
+    
+    if not scores:
+        avg_score = -2.0
+    else:
+        avg_score = sum(scores) / len(scores)
 
     def sigmoid(x):
         return 1 / (1 + math.exp(-x))
@@ -84,12 +89,12 @@ def compute_confidence(
     # ----------------------------------
     # MEMORY BOOST
     # ----------------------------------
-    memory_boost = min(len(memory_context) * 0.05, 0.2)
+    memory_boost = min(len(memory_context) * 0.05, 0.15)
 
     # ----------------------------------
     # COMPLEXITY PENALTY
     # ----------------------------------
-    complexity_penalty = 0.05 if query_analysis.get("complexity") == "high" else 0
+    complexity_penalty = 0.1 if query_analysis.get("complexity") == "high" else 0
 
     # ----------------------------------
     # BASE CONFIDENCE
@@ -105,21 +110,14 @@ def compute_confidence(
 
         eval_score = (faithfulness + relevance) / 2
 
-        eval_weight = 0.25
-        confidence = (confidence * (1 - eval_weight)) + (eval_score * eval_weight)
+        # Strong penalty for bad evaluations. A low evaluation score will now drag the confidence
+        # entirely down, instead of barely moving it.
+        confidence = confidence * eval_score
 
     # ----------------------------------
-    # CLAMP BEFORE TRANSFORM
+    # CLAMP (No artificial inflation)
     # ----------------------------------
-    confidence = max(0.0, min(confidence, 1.0))
-
-    # ----------------------------------
-    # 🔥 SMOOTHING
-    # ----------------------------------
-    confidence = math.sqrt(confidence)
-
-    confidence = 0.9 * confidence + 0.1 * (
-        1 / (1 + math.exp(-3 * (confidence - 0.5)))
-    )
-
+    # math.sqrt() was removed here because sqrt(0.4) = 0.63, which artificially 
+    # pushed deeply lacking answers into "high confidence" thresholds!
+    
     return max(0.0, min(confidence, 1.0))
