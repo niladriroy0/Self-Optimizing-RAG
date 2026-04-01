@@ -51,52 +51,57 @@ def rag_pipeline(question):
     tracker = LatencyTracker()
     start_time = time.time()
 
-    print("\n==============================")
-    print("Incoming Query:", question)
+    print("\n" + "="*50)
+    print(f"🚀 [NEW PIPELINE RUN]")
+    print(f"User Query: '{question}'")
+    print("="*50 + "\n")
 
     config_cp = config_manager.get_config()
 
     # ----------------------------------
     # QUERY ANALYSIS
     # ----------------------------------
-
+    print("🔍 [STEP 1] Executing Query Analysis...")
     query_analysis = analyze_query(question)
 
     # ----------------------------------
     # CACHE
     # ----------------------------------
-
+    print("🗂️  [STEP 2] Checking Exact Match Cache...")
     if query_analysis.get("type") != "coding" and config_cp.get("enable_query_cache", True):
         cached = get_cached(question)
         if cached:
-            print("⚡ Cache Hit → returning directly")
+            print("   ⚡ CACHE HIT! Short-circuiting pipeline.")
             return cached
+        print("   ❌ Cache Miss.")
 
     # ----------------------------------
     # MODEL ROUTING
     # ----------------------------------
-
+    print("🚦 [STEP 3] Resolving Dynamic Model Routes...")
     model = route_model_with_exploration(query_analysis, epsilon=0.1)
-    print("Model selected:", model)
+    print(f"   🤖 Selected Primary Model: {model}")
 
     # ----------------------------------
     # KNOWLEDGE ROUTING
     # ----------------------------------
-
     mode = route_knowledge(query_analysis)
-    print("Knowledge Mode:", mode)
+    print(f"   🛤️ Selected Knowledge Pathway: {mode}")
 
     # ----------------------------------
     # 🔥 LLM ONLY MODE (FIXED)
     # ----------------------------------
 
     if mode == "LLM_ONLY":
-
+        print("\n🧠 [FLOW: LLM-ONLY TRIGGERED]")
+        print("   Fetching semantic memories to augment parametric knowledge...")
+        
         tracker.start("llm")
 
         memory_context = retrieve_memory(question)
         context = "\n".join(memory_context)
         
+        print(f"   Generating Answer (Context size: {len(memory_context)} memories)...")
         answer = generate_answer(
             context=context,
             question=question,
@@ -107,7 +112,7 @@ def rag_pipeline(question):
 
         tracker.end("llm")
 
-        # ✅ FIX: compute real confidence
+        print("📊 [STEP 4] Computing LLM-Only Confidence...")
         confidence = compute_confidence(
             clean_reranked=[],
             top_k=0,
@@ -116,6 +121,7 @@ def rag_pipeline(question):
             evaluation_scores=None,
             answer=answer
         )
+        print(f"   Final Confidence Source: {confidence:.2f}")
 
         total_latency = time.time() - start_time
 
@@ -132,36 +138,37 @@ def rag_pipeline(question):
 
         final_response = (answer, observability)
 
+        print("💾 [STEP 5] Updating Sub-Systems & Terminating Flow...")
         if query_analysis.get("type") != "coding":
             set_cache(question, final_response)
             
         store_memory(question, answer, confidence)
 
+        print("✅ Pipeline Complete.\n")
         return final_response
 
     # ----------------------------------
     # CONFIG
     # ----------------------------------
+    print("\n📚 [FLOW: HYBRID/RAG TRIGGERED]")
+    print("⚙️  Applying Optimizer Settings...")
 
     config = choose_config()
     top_k = config_cp.get("top_k", config.get("top_k", 3))
 
-    print("Optimizer Config:", config)
-    print("Control Plane Config:", config_cp)
-
     # ----------------------------------
     # QUERY PLANNING
     # ----------------------------------
-
+    print("🗺️  Executing Query Planning & Sub-Queries...")
     sub_queries = plan_query(question, query_analysis)
 
     if len(sub_queries) > 1:
-        print("🔀 Multi-hop queries:", sub_queries)
+        print(f"   🔀 Strategy: Multi-hop reasoning ({len(sub_queries)} queries)")
 
     # ----------------------------------
     # RETRIEVAL
     # ----------------------------------
-
+    print("🔎 [STEP 4] Executing Hybrid Search...")
     tracker.start("retrieval")
 
     all_docs = []
@@ -176,12 +183,19 @@ def rag_pipeline(question):
         all_docs.extend(docs)
 
     tracker.end("retrieval")
+    print(f"   📥 Retrieved {len(all_docs)} raw documents from Vector store.")
 
+    # --------------------------
+    # FALLBACK ROUTE
+    # --------------------------
     if not all_docs:
-        print("⚠️ No relevant documents found. Falling back to LLM-only.")
+        print("\n⚠️  [CRITICAL] Vector Search returned 0 documents.")
+        print("   🔄 Executing Smart Fallback: Promoting to Parametric Intelligence...")
+        
         tracker.start("llm")
         memory_context = retrieve_memory(question)
         context = "\n".join(memory_context)
+        
         answer = generate_answer(
             context=context,
             question=question,
@@ -190,6 +204,7 @@ def rag_pipeline(question):
             query_analysis=query_analysis
         )
         tracker.end("llm")
+        
         confidence = compute_confidence(
             clean_reranked=[],
             top_k=0,
@@ -199,6 +214,7 @@ def rag_pipeline(question):
             answer=answer
         )
         total_latency = time.time() - start_time
+        
         observability = {
             "mode": "FALLBACK_LLM",
             "model_used": model,
@@ -209,60 +225,48 @@ def rag_pipeline(question):
             },
             "confidence": confidence
         }
+        
         final_response = (answer, observability)
         if query_analysis.get("type") != "coding":
             set_cache(question, final_response)
         store_memory(question, answer, confidence)
+        
+        print("✅ Pipeline Complete (Via Fallback).\n")
         return final_response
 
     # ----------------------------------
-    # DEDUP
+    # DEDUP & RERANK
     # ----------------------------------
-
+    print("🧹 [STEP 5] Deduplicating & Cross-Encoder Reranking...")
     retrieved_docs = list(dict.fromkeys(all_docs))
 
-    # ----------------------------------
-    # RERANK
-    # ----------------------------------
-
     tracker.start("rerank")
-
     rerank_query = " ".join(sub_queries) if len(sub_queries) > 1 else question
 
     reranked = rerank(rerank_query, retrieved_docs)
     clean_reranked = [(doc, float(score)) for doc, score in reranked]
-
     reranked_docs = [doc for doc, _ in clean_reranked]
-
     tracker.end("rerank")
 
     final_docs = reranked_docs[:top_k]
+    print(f"   🎯 Highest quality chunks isolated (Top K = {top_k})")
 
     # ----------------------------------
-    # MEMORY
+    # MEMORY & CONTEXT MESHING
     # ----------------------------------
-
+    print("🧠 [STEP 6] Syncing Semantic Memory Store...")
     memory_context = retrieve_memory(question)
 
-    # ----------------------------------
-    # CONTEXT
-    # ----------------------------------
-
+    print("🧩 Meshing Memories with Vector DB Chunks...")
     context_parts = []
     context_parts.extend(memory_context[:2])
     context_parts.extend(final_docs)
-
     context = "\n".join(context_parts)
-
-    print(
-        "Retrieved Docs:", len(final_docs),
-        "| Memory Used:", len(memory_context)
-    )
 
     # ----------------------------------
     # LLM
     # ----------------------------------
-
+    print("💬 [STEP 7] Executing Primary Generation...")
     tracker.start("llm")
 
     answer = generate_answer(
@@ -278,28 +282,27 @@ def rag_pipeline(question):
     # ----------------------------------
     # EVALUATION + CONFIDENCE
     # ----------------------------------
-
+    print("⚖️  [STEP 8] Synchronous Answer Evaluation...")
     evaluation_scores = evaluate_rag(question, answer, context)
 
+    print("📊 Computing Final Global Confidence Score...")
     confidence = compute_confidence(
         clean_reranked,
         top_k,
         memory_context,
         query_analysis,
         evaluation_scores,
-        answer=answer   # 🔥 already correct
+        answer=answer
     )
+    print(f"   Final Confidence Set: {confidence:.2f}")
 
     # ----------------------------------
-    # MEMORY STORE
+    # MEMORY STORE & ASYNC LOGGING
     # ----------------------------------
-
+    print("💾 [STEP 9] Updating Systems & Terminating Flow...")
     store_memory(question, answer, confidence)
 
-    # ----------------------------------
-    # ASYNC LOGGING
-    # ----------------------------------
-
+    print("   📡 Firing Async Evaluation Worker Hook...")
     run_evaluation_async(
         question,
         answer,
@@ -309,9 +312,8 @@ def rag_pipeline(question):
     )
 
     # ----------------------------------
-    # OBSERVABILITY
+    # FINAL METRICS
     # ----------------------------------
-
     total_latency = time.time() - start_time
 
     observability = {
@@ -336,11 +338,10 @@ def rag_pipeline(question):
 
     final_response = (answer, observability)
 
-    # ----------------------------------
-    # CACHE
-    # ----------------------------------
-
     if query_analysis.get("type") != "coding":
         set_cache(question, final_response)
+
+    print(f"⏱️  Total Processing Time: {total_latency:.2f}s")
+    print("✅ Pipeline Complete.\n")
 
     return final_response
