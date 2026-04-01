@@ -94,8 +94,11 @@ def rag_pipeline(question):
 
         tracker.start("llm")
 
+        memory_context = retrieve_memory(question)
+        context = "\n".join(memory_context)
+        
         answer = generate_answer(
-            context="",
+            context=context,
             question=question,
             model=model,
             query_type=query_analysis.get("type", "general"),
