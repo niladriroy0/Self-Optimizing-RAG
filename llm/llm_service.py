@@ -123,11 +123,19 @@ def generate_answer(
 
             threshold = config_manager.get_param("confidence_threshold", 0.6)
 
-            if confidence < threshold:
+            if confidence < threshold or "I don't have enough information" in answer:
 
                 fallback_model = get_fallback_model(query_analysis)
 
-                fallback_answer = _call_llm(fallback_model, prompt)
+                # 🔥 If RAG context failed, fallback without context (use parametric knowledge)
+                fallback_prompt = build_prompt(
+                    context="", 
+                    question=question,
+                    query_type=query_type,
+                    query_analysis=query_analysis
+                )
+
+                fallback_answer = _call_llm(fallback_model, fallback_prompt)
                 fallback_answer = clean_output(fallback_answer)
 
                 answer = fallback_answer
