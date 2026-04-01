@@ -178,7 +178,42 @@ def rag_pipeline(question):
     tracker.end("retrieval")
 
     if not all_docs:
-        return "No relevant documents found.", {}
+        print("⚠️ No relevant documents found. Falling back to LLM-only.")
+        tracker.start("llm")
+        memory_context = retrieve_memory(question)
+        context = "\n".join(memory_context)
+        answer = generate_answer(
+            context=context,
+            question=question,
+            model=model,
+            query_type=query_analysis.get("type", "general"),
+            query_analysis=query_analysis
+        )
+        tracker.end("llm")
+        confidence = compute_confidence(
+            clean_reranked=[],
+            top_k=0,
+            memory_context=memory_context,
+            query_analysis=query_analysis,
+            evaluation_scores=None,
+            answer=answer
+        )
+        total_latency = time.time() - start_time
+        observability = {
+            "mode": "FALLBACK_LLM",
+            "model_used": model,
+            "query_analysis": query_analysis,
+            "latency": {
+                **tracker.get_all(),
+                "total_seconds": total_latency
+            },
+            "confidence": confidence
+        }
+        final_response = (answer, observability)
+        if query_analysis.get("type") != "coding":
+            set_cache(question, final_response)
+        store_memory(question, answer, confidence)
+        return final_response
 
     # ----------------------------------
     # DEDUP
