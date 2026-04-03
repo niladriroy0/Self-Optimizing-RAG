@@ -57,6 +57,20 @@
 - **Places to Improve:** Add fallback mechanisms if Redis is down, or implement connection pooling.
 - **Need Rating:** 3/5
 
+## `.\chroma_db\`
+- **Contains:** Persistent storage directory for ChromaDB vector index.
+- **Functions:** *(Internal ChromaDB binary data).*
+- **Purpose in Application:** Maintains the on-disk embeddings for the application.
+- **Places to Improve:** Regularly back up the SQLite database to prevent index corruption.
+- **Need Rating:** 5/5
+
+## `.\configs\system_config.yaml`
+- **Contains:** Empty configuration YAML file.
+- **Functions:** *(None).*
+- **Purpose in Application:** Intended for loading system-level configuration parameters outside of code.
+- **Places to Improve:** Populate and wire to `config_manager.py`.
+- **Need Rating:** 1/5
+
 ## `.\control_plane\config_manager.py`
 - **Contains:** Central singleton control plane configuration manager.
 - **Functions:**
@@ -105,7 +119,7 @@
 ## `.\evaluation\confidence_model.py`
 - **Contains:** Unified confidence scoring logic for evaluating system responses.
 - **Functions:**
-  - `compute_confidence`: Calculates an overall confidence score (0.0 to 1.0) using retrieval strength, memory boosting, complexity penalties, and evaluation scores.
+  - `compute_confidence`: Calculates an overall confidence score (0.0 to 1.0) using retrieval strength, memory boosting, complexity penalties, and evaluation scores. Also features context-awareness for LLM-Only modes, penalizing AI uncertainty language.
 - **Purpose in Application:** Gives the self-optimizing engine a numerical representation of certainty. This affects caching, fallback actions, and dynamic route choices.
 - **Places to Improve:** Add an integration with an ensemble model. Expand normalization mechanisms (currently defaults to min-max over top-k scores which could be sensitive to outliers).
 - **Need Rating:** 5/5
@@ -116,6 +130,13 @@
   - `evaluate_rag`: Compares the generated answer to the ground truth or context (e.g., checking for context relevance, answer accuracy).
 - **Purpose in Application:** Quantifies the performance of the system so the optimization layer can make routing decisions.
 - **Places to Improve:** Add more granular metrics (e.g., faithfulness, hallucination rate) instead of a single overall evaluation score.
+- **Need Rating:** 5/5
+
+## `.\experiments.db`
+- **Contains:** SQLite database containing evaluation metrics.
+- **Functions:** *(Database file).*
+- **Purpose in Application:** Stores logs of model decisions, configurations, and resulting evaluation scores to drive the self-optimization engine.
+- **Places to Improve:** Move to a more robust database like PostgreSQL if concurrency scales up.
 - **Need Rating:** 5/5
 
 ## `.\ingestion\chunker.py`
@@ -154,6 +175,13 @@
 - **Purpose in Application:** Ensures the LLM is properly instructed based on the user's specific context and constraints.
 - **Places to Improve:** Optimize `trim_context` to prioritize the highest-ranked documents rather than just arbitrarily cutting off the end.
 - **Need Rating:** 5/5
+
+## `.\logs\rag_logs.json`
+- **Contains:** Persistent query log output.
+- **Functions:** *(JSON Data File).*
+- **Purpose in Application:** Stores user query inputs, results, and generated metrics in a text-readable format.
+- **Places to Improve:** Add log rotation limits to prevent infinite disk space scaling.
+- **Need Rating:** 3/5
 
 ## `.\observability\cost_tracker.py`
 - **Contains:** Empty placeholder file intended for tracking token usage / application costs. 
@@ -214,6 +242,21 @@
 - **Places to Improve:** Could allow dynamic execution graph planning.
 - **Need Rating:** 5/5
 
+## `.\project_structure.md`
+- **Contains:** Outdated markdown summary of project structure.
+- **Purpose in Application:** Redundant context descriptor largely subsumed by `CODEBASE_OVERVIEW.md`.
+- **Need Rating:** 1/5
+
+## `.\rag_logging\__init__.py`
+- **Contains:** Placeholder for log tooling package.
+- **Purpose in Application:** Initializes the package. Needs to contain actual implementations to write to `rag_logs.json`.
+- **Need Rating:** 2/5
+
+## `.\requirements.txt`
+- **Contains:** pip dependencies and package requirements.
+- **Purpose in Application:** Needed for deployment.
+- **Need Rating:** 5/5
+
 ## `.\retrieval\hybrid_retriever.py`
 - **Contains:** Mechanism to combine keyword and vector search.
 - **Functions:**
@@ -236,9 +279,9 @@
 - **Contains:** The main execution flow that chains all components together.
 - **Functions:**
   - `normalize_documents`: Cleans up the formatting of retrieved text.
-  - `rag_pipeline`: Orchestrates retrieving, prompt building, and LLM generation. Sync stores Chroma memory dynamically based on evaluator responses.
+  - `rag_pipeline`: Orchestrates retrieving, prompt building, and LLM generation. Incorporates a Smart Fallback to parametric intelligence when retrieval finds 0 documents. Sync stores Chroma memory dynamically based on evaluator responses.
 - **Purpose in Application:** The single source of truth for how a query becomes an answer. Ties the entire architecture together.
-- **Places to Improve:** Auto-escalation behaviors could be safely reintroduced or augmented with lightweight agents to handle edge-case hallucinated data.
+- **Places to Improve:** Auto-escalation behaviors could be safely reintroduced or augmented with lightweight agents to handle edge-case hallucinated data further.
 - **Need Rating:** 5/5
 
 ## `.\retrieval\reranker.py`
@@ -255,6 +298,16 @@
 - **Purpose in Application:** Takes raw `.txt` files from the `data` directory, uses the `chunk_document` method from `chunker.py`, and loads them into Chroma search instances for RAG availability.
 - **Places to Improve:** Should implement chunk overlapping parameterization. Allow for bulk-concurrent ingest streams rather than a manual loop. Support more formats than just `.txt`.
 - **Need Rating:** 5/5
+
+## `.\summary_data.json`
+- **Contains:** Evaluated snapshot metrics for dashboard display.
+- **Purpose in Application:** Fast-retrieval summarized analytics for Streamlit components.
+- **Need Rating:** 4/5
+
+## `.\tests\__init__.py`
+- **Contains:** Empty definitions for a testing suite.
+- **Purpose in Application:** Placeholder for future automated evaluation.
+- **Need Rating:** 2/5
 
 ## `.\ui\streamlit_app.py`
 - **Contains:** The frontend user interface code using Streamlit.

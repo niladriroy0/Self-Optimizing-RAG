@@ -17,8 +17,8 @@ The Self-Optimizing RAG (Retrieval-Augmented Generation) system is a Python-base
                                                         │
                                                         ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Data Plane    │◀──▶│   RAG Pipeline  │───▶│   Optimization  │
-│(Stubs currently)│    │   (Core Logic)  │    │   Engine        │
+│                 │◀──▶│   RAG Pipeline  │───▶│   Optimization  │
+│                 │    │   (Core Logic)  │    │   Engine        │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                         │
                                                         ▼
@@ -84,7 +84,7 @@ Key steps executed by `rag_pipeline(question)`:
 7. If `LLM_ONLY` -> generates answer and returns early, measuring LLM latency.
 8. Optimizer Config via `optimization.optimizer.choose_config()`.
 9. Multi-hop Retrieval (if enabled) via `query_processing.query_planner.decompose_query` and multiple `hybrid_search` calls.
-10. Deduplication to remove redundantly retrieved documents.
+10. Deduplication to remove redundantly retrieved documents. If no documents are found, it triggers a **Smart Fallback** to Parametric Intelligence (LLM-only context fallback).
 11. Reranking (`retrieval.reranker.rerank`) to obtain top candidates, measuring rerank latency.
 12. **Memory Augmentation** via `cache.chroma_memory_store.retrieve_memory(question)`. Prioritizes memory context explicitly via context fusion.
 13. LLM generation via `llm.llm_service.generate_answer(...)`, measuring LLM latency.
@@ -122,7 +122,7 @@ Key steps executed by `rag_pipeline(question)`:
 
 #### 7. Evaluation System (`evaluation/`)
 - **Metrics**: Cosine similarity computes `answer_relevance` and `faithfulness` leveraging the centralized embedding service.
-- **Confidence**: `confidence_model.py` unifies retrieval scores, memory boosts, complexity penalties, and evaluation scores into a single confidence metric.
+- **Confidence**: `confidence_model.py` unifies retrieval scores, memory boosts, complexity penalties, and evaluation scores into a single confidence metric. It includes a content-aware scoring mechanism for parametric-only answers that penalizes hallucination markers.
 
 #### 8. Optimization Engine (`optimization/`)
 - **Components**:
@@ -165,8 +165,8 @@ Key steps executed by `rag_pipeline(question)`:
 - **Streamlit App**: `ui/streamlit_app.py` submits to `http://127.0.0.1:8000/query`.
 - **Dashboard App**: `dashboard/app.py` reads `experiments.db` (SQLite) to showcase experiment performance metrics.
 
-#### 16. Data Plane (`data_plane/`)
-- **Status**: Completely empty; routing orchestrated mostly within `retrieval/pipeline.py`.
+#### 16. Configs & Tests (`configs/`, `tests/`)
+- **Status**: Currently placeholders waiting for test coverage (`tests/`) and YAML parameterization mapping (`configs/`).
 
 ## Data Flow
 
@@ -179,7 +179,7 @@ Key steps executed by `rag_pipeline(question)`:
 5. **Caching** -> `query_cache.get_cached` (if enabled in `ConfigManager`)
 6. **Model & Knowledge Routing** -> Control plane selects model & mode
 7. **Config Selection** -> `optimization.optimizer.choose_config()` and `control_plane.config_manager.get_config()`
-8. **Hybrid Retrieval (Multi-hop)** -> If complex, breaks query via `query_planner` and aggregates hybrid searches (tracked latency)
+8. **Hybrid Retrieval (Multi-hop)** -> If complex, breaks query via `query_planner` and aggregates hybrid searches (tracked latency). If no documents are retrieved, falls back to Parametric Intelligence.
 9. **Memory Augmentation** -> Combine retrieved docs + semantic memory (from `chroma_memory_store`)
 10. **LLM Generation** -> Ollama request with tailored structured prompt (tracked latency)
 11. **Confidence Computation** -> Calculates a holistic confidence score combining eval metrics and heuristics
@@ -211,9 +211,9 @@ Key steps executed by `rag_pipeline(question)`:
 
 ## Current Implementation Status & Known Issues
 
-- **Core Pipeline**: Integrated advanced routing, evaluation, caching, latency observability, and hybrid retrieval. Features multi-hop query decomposition, confidence scoring, and synchronous Chroma-backed semantic memory updates.
+- **Core Pipeline**: Integrated advanced routing, evaluation, caching, latency observability, and hybrid retrieval. Features multi-hop query decomposition, parametric fallback for empty retrievals, confidence scoring, and synchronous Chroma-backed semantic memory updates.
 - **Optimization Sync Resolved**: Evaluation worker correctly logs to SQLite `experiment_db`.
-- **Data Plane / Control Plane Stubs**: `data_plane` is empty. Core pipeline handles choreography. `control_plane` hosts `config_manager`.
+- **Data Plane / Control Plane Stubs**: The old `data_plane` concept has been fully removed. Core pipeline handles choreography. `control_plane` hosts `config_manager`.
 - **New Modules Added**: `embeddings/` for reusable encoders, `observability/` for tracing, `query_processing/query_planner.py` for multi-hop decomposition, and `cache/chroma_memory_store.py` for dynamic short-term memory limits.
 - **Testing**: No automated tests present.
 

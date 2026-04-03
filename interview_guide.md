@@ -247,7 +247,7 @@ User submits query (UI / API)
 │           reranker.py                        │
 │           (Cross-Encoder scoring)            │
 └──────────────────────────────────────────────┘
-         │
+         │ (If 0 docs retrieved: Smart Fallback to Parametric LLM logic)
          ▼
 ┌─────────────────────────┐
 │  chroma_memory_store.py │ ← Inject high-confidence past answers as context
@@ -559,6 +559,7 @@ confidence = (retrieval_strength * 0.4)
 - **Evaluation Score**: `(answer_relevance + faithfulness) / 2` from `rag_evaluator.py`.
 - **Memory Boost**: Whether the answer was reinforced by semantic memory context.
 - **Complexity Penalty**: If the query was decomposed into many sub-questions, the overall confidence is slightly reduced.
+- **Content-Aware Penalty (LLM-Only)**: In LLM-only mode without retrieval, penalties are applied for uncertainty phrases like "I don't know" or length mismatches.
 
 **What it's used for:**
 1. **Memory gating**: Only store answers with confidence > threshold (e.g., 0.75).
