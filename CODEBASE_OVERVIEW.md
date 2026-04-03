@@ -33,12 +33,14 @@
 - **Need Rating:** 5/5
 
 ## `.\cache\memory_store.py`
-- **Contains:** Legacy logic for persistent memory previously using raw numpy dot-products.
+- **Contains:** ⚠️ **DEPRECATED** — Legacy in-memory store using raw numpy cosine similarity. Explicitly marked as deprecated at the top of the file and **not imported or called anywhere in the active pipeline.**
 - **Functions:**
-  - `store_memory`, `verify_memory`, `retrieve_memory`. 
-- **Purpose in Application:** Maintained strictly for backwards compatibility fallback. Primarily replaced by `chroma_memory_store.py`.
-- **Places to Improve:** Can be safely deprecated or removed.
-- **Need Rating:** 2/5
+  - `cosine_sim`: Manual cosine similarity via numpy dot products.
+  - `store_memory`, `verify_memory`, `retrieve_memory`: Original memory lifecycle methods, fully superseded by `chroma_memory_store.py`.
+- **Purpose in Application:** None currently. Was the original prototype before ChromaDB was introduced.
+- **Places to Improve:** Safe to delete — no active references exist in the codebase.
+- **Need Rating:** 0/5 (Deprecated — candidate for removal)
+
 
 ## `.\cache\query_cache.py`
 - **Contains:** Caching layer specifically for query results to avoid redundant LLM calls.
