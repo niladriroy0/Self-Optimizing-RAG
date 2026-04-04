@@ -1,5 +1,6 @@
 import time
 import uuid
+import threading
 from embeddings.embedding_service import embed_text
 from vectorstore.chroma_store import client
 
@@ -23,9 +24,24 @@ def store_memory(query, answer, confidence):
     if confidence < 0.7:
         return
 
+    query_emb = embed_text(query)
+
+    # 1. Deduplication Check (prevent identical/near-identical queries from flooding memory)
+    if memory_collection.count() > 0:
+        existing = memory_collection.query(
+            query_embeddings=[query_emb],
+            n_results=1
+        )
+        # ChromaDB default distance is L2. < 0.1 indicates extreme semantic similarity (near duplicate)
+        if existing and existing.get("distances") and existing["distances"][0]:
+            if existing["distances"][0][0] < 0.1:
+                print("⚠️ MEMORY DUPLICATE DETECTED: Skipping.")
+                return
+
+    # 2. Store with QUERY embedding instead of answer embedding for accurate retrieval
     memory_collection.add(
         documents=[answer],
-        embeddings=[embed_text(answer)],
+        embeddings=[query_emb],
         metadatas=[{
             "query": query,
             "confidence": float(confidence),
@@ -37,7 +53,8 @@ def store_memory(query, answer, confidence):
 
     print(f"📥 MEMORY STORED (Chroma) | Conf: {round(confidence, 3)}")
 
-    _cleanup_memory()
+    # 3. Fire-and-forget sync (async memory limits to avoid blocking RAG API latency)
+    threading.Thread(target=_cleanup_memory, daemon=True).start()
 
 
 # ----------------------------------
