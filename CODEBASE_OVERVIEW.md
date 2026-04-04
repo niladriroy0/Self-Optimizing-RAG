@@ -29,7 +29,7 @@
   - `verify_memory`: Manual intervention or rule-based updates validating past memory.
   - `_cleanup_memory`, `cleanup_old_memory`: Enforces TTL and strict bounding box (e.g., 200 items max) to prevent unbounded memory growth.
 - **Purpose in Application:** Radically cuts down hallucination and response time by instantly providing semantic 'past successful' memory context into the builder prompt.
-- **Places to Improve:** Optimize the cleanup functions to run asynchronously instead of halting the store operation execution.
+- **Places to Improve:** Deduplication threshold (L2 distance < 0.1) could be made a configurable parameter in `config_manager.py` rather than hardcoded.
 - **Need Rating:** 5/5
 
 ## `.\cache\memory_store.py`
