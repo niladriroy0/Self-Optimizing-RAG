@@ -5,6 +5,7 @@ import requests
 from llm.prompt_builder import build_prompt
 from control_plane.config_manager import config_manager
 from control_plane.model_router import get_fallback_model
+from observability.cost_tracker import cost_tracker
 
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -66,8 +67,18 @@ def _call_llm(model, prompt):
     )
 
     result = response.json()
+    answer = result.get("response", "")
 
-    return result.get("response", "")
+    # 🔥 Track token usage and cost for every LLM call
+    input_tokens  = cost_tracker.estimate_tokens(prompt)
+    output_tokens = cost_tracker.estimate_tokens(answer)
+    cost_tracker.record(
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens
+    )
+
+    return answer
 
 
 # ----------------------------------
