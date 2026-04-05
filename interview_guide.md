@@ -32,9 +32,9 @@
 ### 🏗️ 2-Minute Version (For Technical Interviewers)
 > "The system is built on FastAPI and exposes a streaming query endpoint. When a user submits a query, it first checks an in-memory cache and a ChromaDB-backed semantic memory store. If there's no cached answer, the query goes through analysis and multi-hop decomposition if needed. Then a control plane routes the query to the most appropriate LLM and knowledge mode — LLM-only, hybrid, or pure RAG.
 >
-> For retrieval, I combine BM25 keyword matching and semantic vector search using ChromaDB. Results are merged and passed through a Cross-Encoder reranker to get the highest-relevance documents. These documents, combined with any relevant semantic memory, form the context for the LLM prompt.
+> For retrieval, I combine BM25 keyword matching and semantic vector search using ChromaDB. Results are merged via Reciprocal Rank Fusion and passed through a Cross-Encoder reranker to get the highest-relevance documents. These documents, combined with any relevant semantic memory, form the context for the LLM prompt.
 >
-> After generation, I compute a confidence score using cosine similarity between the answer and the query, penalized by complexity and boosted by memory relevance. High-confidence answers are persisted back into the semantic memory. All interactions are logged to SQLite and analyzed by the optimizer to dynamically adjust parameters like `top_k` and `chunk_size` for future queries."
+> After generation, I compute a confidence score using retrieval strength, an evaluation signal (cosine similarity between the answer and context), a memory boost, and a complexity penalty. High-confidence answers are persisted back into the semantic memory store. All interactions are logged to SQLite and analyzed by the optimizer to dynamically adjust parameters like `top_k` and `chunk_size` — and those adjustments now persist to a YAML config file so the system's learned state survives server restarts."
 
 ---
 
@@ -64,12 +64,14 @@ Answer returned to user
 **Standard RAG vs. This Project:**
 | Feature | Standard RAG | Self-Optimizing RAG |
 |---|---|---|
-| Retrieval | Vector search only | Hybrid: Vector + BM25 |
+| Retrieval | Vector search only | Hybrid: Vector + BM25 (RRF) |
 | Reranking | None | Cross-Encoder |
-| Memory | None | ChromaDB-backed TTL memory |
-| Optimization | Static | Dynamic, history-driven |
-| Model Selection | Fixed | Bandit-based routing |
-| Evaluation | None | Cosine-similarity metrics |
+| Memory | None | ChromaDB-backed TTL memory (query-indexed) |
+| Optimization | Static | Dynamic, history-driven + YAML persistence |
+| Model Selection | Fixed | Epsilon-greedy bandit routing |
+| Evaluation | None | Cosine-similarity metrics (relevance, faithfulness, hallucination) |
+| Cost Tracking | None | Per-model token usage + USD cost, persisted to disk |
+| Test Suite | None | 43 tests across 8 modules with full ML mocking |
 
 ---
 
@@ -425,14 +427,17 @@ After hybrid merging, we have ~10-20 candidate documents. Cross-Encoder rerankin
 ### Memory Lifecycle
 
 ```
-High-confidence answer generated
+High-confidence answer generated (confidence ≥ 0.7)
          │
          ▼
 store_memory(question, answer, confidence_score)
          │
+         ├── Near-duplicate check (L2 distance < 0.1 against existing query embeddings)
+         │   If duplicate → skip (no flooding)
          ▼
-ChromaDB saves: embedding(question), answer_text, timestamp, confidence
-         │
+ChromaDB saves: embedding(QUERY), answer_text, timestamp, confidence
+         │       Note: query embedding is stored (not answer embedding)
+         │       so that future similar QUESTIONS match correctly
          ▼
 ... later ...
          │
@@ -443,17 +448,18 @@ retrieve_memory(new_question)
          │
          ▼
 ChromaDB finds: cosine_similarity(new_question_embedding, stored_question_embedding) > threshold
-         │
+         │       Filtered by: confidence ≥ 0.65 OR verified == True
          ▼
-Returns stored answer (no LLM needed!)
+Returns stored answer as context (injected before LLM generation)
 ```
 
-### Memory Hygiene (TTL & Capacity Limits)
+### Memory Hygiene (TTL, Deduplication & Capacity Limits)
 
 Unbounded memory growth is dangerous. The system enforces:
-- **TTL (Time-to-Live):** Old memories past a certain age are pruned via `cleanup_old_memory()`.
-- **Capacity Limit:** Max 200 items in the memory collection. If exceeded, cleanup runs to remove the lowest-confidence entries.
-- **Verification:** The `/feedback` endpoint calls `verify_memory()`, allowing users or administrators to flag incorrect memories for removal.
+- **Near-Duplicate Detection**: Before storing, a k-NN query checks if an almost-identical question already exists (L2 distance < 0.1). If so, storage is skipped.
+- **TTL (Time-to-Live):** Old memories past 7 days are pruned via `cleanup_old_memory()`.
+- **Capacity Limit:** Max 200 items. If exceeded, `_cleanup_memory()` removes the oldest entries — runs in a **background thread** to avoid blocking the API response.
+- **Verification:** The `/feedback` endpoint calls `verify_memory()` on `chroma_memory_store`, allowing users to flag incorrect memories for removal or mark them as verified.
 
 ### Why This Is Critical (The Hallucination Problem)
 
@@ -502,15 +508,17 @@ else:
 
 ### Config Manager (`config_manager.py`)
 
-A **thread-safe singleton** that stores the current system configuration:
+A **thread-safe singleton** that stores the current system configuration with **full YAML persistence**:
 - `top_k` — how many documents to retrieve.
 - `chunk_size` — how to split documents during ingestion.
 - `enable_multi_hop` — whether to decompose complex queries.
 - `enable_decomposition` — whether the LLM decomposer is active.
+- `enable_fallback` — whether to activate the parametric fallback when retrieval returns 0 documents.
+- `confidence_threshold` — minimum confidence to gate memory and cache writes.
 
-**Thread-safety:** Uses Python `threading.Lock` to ensure that concurrent API requests don't corrupt the config state by reading and writing simultaneously.
+**Thread-safety:** Uses Python `threading.Lock` to ensure that concurrent API requests don't corrupt the config state.
 
-**Known limitation:** State is lost on server restart. A production fix would persist this to Redis so multiple server instances share the same learned config.
+**Persistence:** Every write (`update_config`, `set_param`, `smart_update`) immediately calls `_save_to_disk()` which writes to `configs/system_config.yaml`. On startup, `_load_from_disk()` restores the previously learned state. This means the optimizer's routing decisions now survive server restarts — the config amnesia problem is solved.
 
 ---
 
@@ -526,8 +534,9 @@ The three pillars of observability:
 3. **Traces**: What path did a request take? (e.g., "Cache MISS → Vector search → Rerank → LLM → Memory store")
 
 **In this project:**
-- `latency_tracker.py` captures per-stage timing (retrieval, rerank, LLM).
-- `experiment_db.py` stores evaluation metrics per interaction.
+- `latency_tracker.py` captures per-stage timing (retrieval, rerank, LLM) in every API response.
+- `cost_tracker.py` records per-model token usage and estimated USD cost on every LLM call. Session totals and all-time totals are persisted separately to `logs/cost_log.json`.
+- `experiment_db.py` stores evaluation metrics per interaction in SQLite (WAL mode).
 - The `__OBSERVABILITY_START__` JSON block in every API response makes the system fully transparent.
 
 ### Latency Tracker (`latency_tracker.py`)
@@ -562,9 +571,10 @@ confidence = (retrieval_strength * 0.4)
 - **Content-Aware Penalty (LLM-Only)**: In LLM-only mode without retrieval, penalties are applied for uncertainty phrases like "I don't know" or length mismatches.
 
 **What it's used for:**
-1. **Memory gating**: Only store answers with confidence > threshold (e.g., 0.75).
-2. **Cache gating**: Only cache answers with high confidence.
-3. **User transparency**: Shown in the observability dashboard.
+1. **Memory gating**: Only store answers with confidence ≥ 0.7 threshold.
+2. **Cache gating**: Only cache answers with high confidence (not coding type).
+3. **Parameter adaptation**: `adapt_config` in `optimizer.py` reacts to low evaluation scores by incrementing `top_k` or `chunk_size`, then persists the change to YAML.
+4. **User transparency**: Shown in the observability payload and dashboard.
 
 ---
 
@@ -662,7 +672,7 @@ Load Balancer (Nginx)
 3. **Fallback model:** Route to a different LLM (e.g., a cloud API like Groq or OpenAI) if local Ollama is down.
 4. **Graceful response:** Return cached answer or memory answer instead of a raw error.
 
-**In the code:** `generate_answer()` in `llm_service.py` currently lacks retry logic. Adding `tenacity` library's `@retry` decorator would handle this cleanly.
+**In the code:** `generate_answer()` in `llm_service.py` currently lacks retry logic. Adding `tenacity` library's `@retry` decorator would handle this cleanly. The fallback model path (`get_fallback_model`) is already wired in for confidence-based LLM-level fallback.
 
 ---
 
@@ -759,7 +769,7 @@ def verify_api_key(api_key: str = Security(api_key_header)):
 ### "Why SQLite and not a proper database?"
 
 **The honest answer:**
-> "SQLite is perfect for this use case because the query volume is low (logging one row per request), it's zero-configuration, it's serverless, and it's ACID-compliant. I don't need the overhead of running a PostgreSQL server for logging experiments on a single-node deployment. However, I fully understand that SQLite becomes a bottleneck at high concurrency (it has only one writer at a time). If this system needed to handle hundreds of concurrent requests, I'd migrate to PostgreSQL with connection pooling via PgBouncer."
+> "SQLite is perfect for this use case because the query volume is low (logging one row per request), it's zero-configuration, serverless, and ACID-compliant. I've also enabled **WAL (Write-Ahead Logging) mode** and set `PRAGMA synchronous=NORMAL` which dramatically improves concurrent read performance — readers never block writers. The `timeout=30` parameter prevents 'database is locked' errors under threading. If this system needed to handle hundreds of concurrent requests across multiple server processes, I'd migrate to PostgreSQL with connection pooling via PgBouncer."
 
 ---
 
