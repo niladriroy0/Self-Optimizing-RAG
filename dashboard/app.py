@@ -7,7 +7,9 @@ st.title("Self Optimizing RAG Dashboard")
 
 def load_data():
     try:
-        conn = sqlite3.connect("experiments.db")
+        # Use a timeout and WAL mode so reads from Streamlit don't block API writes.
+        conn = sqlite3.connect("experiments.db", timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
         df = pd.read_sql_query("SELECT * FROM experiments", conn)
         conn.close()
         
