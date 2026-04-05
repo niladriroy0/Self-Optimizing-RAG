@@ -12,3 +12,11 @@ rank-bm25
 scikit-learn
 streamlit
 requests
+
+# Testing Dependencies
+pytest
+pytest-mock
+httpx
+pytest-cov
+faker
+numpy
