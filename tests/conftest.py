@@ -26,8 +26,17 @@ def mock_config_manager(monkeypatch):
     Globally mocks the config manager across all tests
     to prevent cross-test contamination of system settings.
     """
+    # Create the mock manager but disable disk I/O first
+    # Or, we can just replace its _load_from_disk and _save_to_disk methods
     mock_manager = ConfigManager()
+    monkeypatch.setattr(mock_manager, "_load_from_disk", lambda: None)
+    monkeypatch.setattr(mock_manager, "_save_to_disk", lambda: None)
+    
     mock_manager._init_config() # Ensure clean state
+    # Re-apply the mock methods in case _init_config re-creates or overwrites
+    monkeypatch.setattr(mock_manager, "_load_from_disk", lambda: None)
+    monkeypatch.setattr(mock_manager, "_save_to_disk", lambda: None)
+
     monkeypatch.setattr("control_plane.config_manager.config_manager", mock_manager)
     return mock_manager
 
