@@ -1,7 +1,10 @@
 import threading
 import copy
+import yaml
+from pathlib import Path
 from typing import Dict, Any
 
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "system_config.yaml"
 
 class ConfigManager:
 
@@ -19,7 +22,7 @@ class ConfigManager:
     def _init_config(self):
         self._config_lock = threading.Lock()
 
-        # 🔥 FINAL SYSTEM CONFIG
+        # 🔥 DEFAULT SYSTEM CONFIG
         self._config: Dict[str, Any] = {
 
             # -----------------------
@@ -65,6 +68,29 @@ class ConfigManager:
         }
 
         self._version = 1
+        
+        # Override defaults with any values saved in YAML
+        self._load_from_disk()
+
+    def _load_from_disk(self):
+        """Loads configuration from YAML file if it exists."""
+        if _CONFIG_PATH.exists():
+            try:
+                with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+                    disk_config = yaml.safe_load(f)
+                    if disk_config and isinstance(disk_config, dict):
+                        self._config.update(disk_config)
+            except Exception as e:
+                pass # Fallback to defaults on error
+    
+    def _save_to_disk(self):
+        """Saves current configuration to YAML file. Must be called under lock."""
+        try:
+            _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
+                yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            pass
 
     # -------------------------------
     # READ METHODS
@@ -89,15 +115,18 @@ class ConfigManager:
         with self._config_lock:
             self._config.update(new_config)
             self._version += 1
+            self._save_to_disk()
 
     def set_param(self, key: str, value: Any):
         with self._config_lock:
             self._config[key] = value
             self._version += 1
+            self._save_to_disk()
 
     def reset_config(self):
         with self._config_lock:
             self._init_config()
+            self._save_to_disk()
 
     # -------------------------------
     # SMART UPDATE (NO NOISE)
@@ -115,6 +144,7 @@ class ConfigManager:
 
             if updated:
                 self._version += 1
+                self._save_to_disk()
 
     # -------------------------------
     # DEBUG / OBSERVABILITY
