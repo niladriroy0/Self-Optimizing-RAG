@@ -7,8 +7,17 @@ DB_PATH = "experiments.db"
 _best_config_cache = None
 _cache_timestamp = None
 
+def get_db_connection():
+    """Returns a SQLite connection optimized for concurrency."""
+    # timeout=30 prevents "database is locked" errors under load
+    conn = sqlite3.connect(DB_PATH, timeout=30.0, isolation_level="IMMEDIATE")
+    # WAL mode enables concurrent reads while writing
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
 
     # Drop table to ensure schema update given it's a test environment
@@ -30,7 +39,7 @@ def init_db():
 
 
 def log_experiment(question, config, answer_relevance, faithfulness):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
 
     c.execute("""
@@ -55,7 +64,7 @@ def get_best_config():
     if _best_config_cache:
         return _best_config_cache
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
 
     c.execute("""
