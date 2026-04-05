@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from retrieval.pipeline import rag_pipeline
 from retrieval.keyword_retriever import rebuild_from_chroma
-from cache.memory_store import verify_memory
+from cache.chroma_memory_store import verify_memory
 from control_plane.config_manager import config_manager   # ✅ NEW
 
 import json
