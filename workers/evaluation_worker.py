@@ -3,7 +3,7 @@ from evaluation.rag_evaluator import evaluate_rag
 from optimization.experiment_db import log_experiment
 from optimization.optimizer import adapt_config   # ✅ NEW
 from control_plane.config_manager import config_manager  # ✅ NEW
-from cache.memory_store import store_memory
+from cache.chroma_memory_store import store_memory
 
 
 def run_evaluation_async(question, answer, context, config, pipeline_confidence):
