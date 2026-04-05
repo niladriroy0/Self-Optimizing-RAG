@@ -1,0 +1,47 @@
+# configs/system_config.yaml
+# -------------------------------------------------------
+# Persistent system configuration for Self-Optimizing-RAG.
+# ConfigManager loads this file on startup and writes back
+# any changes made at runtime via update_config / set_param.
+# -------------------------------------------------------
+
+# -----------------------
+# RETRIEVAL
+# -----------------------
+top_k: 5
+use_reranker: true
+reranker_top_k: 20
+chunk_size: 500
+
+# -----------------------
+# MODEL CONTROL
+# -----------------------
+model: null          # null = auto-select via model_router
+temperature: 0.2
+max_tokens: 512
+
+# -----------------------
+# INTELLIGENCE FEATURES
+# -----------------------
+enable_multi_hop: true
+enable_decomposition: true
+enable_fallback: true
+
+# -----------------------
+# HYBRID RETRIEVAL
+# -----------------------
+enable_hybrid: true
+keyword_weight: 0.5
+semantic_weight: 0.5
+
+# -----------------------
+# MEMORY / CACHE
+# -----------------------
+enable_query_cache: true
+enable_memory: true
+confidence_threshold: 0.6
+
+# -----------------------
+# OBSERVABILITY
+# -----------------------
+enable_logging: true
