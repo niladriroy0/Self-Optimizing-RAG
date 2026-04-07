@@ -83,3 +83,14 @@ def get_best_config():
         return _best_config_cache
 
     return None
+
+def get_all_experiments():
+    """Returns all rows from the experiments table as a list of dicts."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM experiments ORDER BY timestamp DESC")
+    columns = [description[0] for description in c.description]
+    rows = c.fetchall()
+    conn.close()
+    
+    return [dict(zip(columns, row)) for row in rows]
