@@ -65,6 +65,13 @@ class ConfigManager:
             # OBSERVABILITY
             # -----------------------
             "enable_logging": True,
+
+            # -----------------------
+            # 🔥 LOW RESOURCE MODE (CPU-Only optimizations)
+            # -----------------------
+            "low_resource_mode": True,          # Reduces heavy compute on CPU-only machines
+            "min_relevance_threshold": 0.15,    # Reranker score below this → Early Fallback
+            "max_retrieval_distance": 1.5,      # Chroma L2 distance above this → filter out
         }
 
         self._version = 1
