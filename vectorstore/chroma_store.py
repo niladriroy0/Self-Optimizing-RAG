@@ -24,9 +24,12 @@ def search_documents(query, k=3):
 
     results = collection.query(
         query_texts=[query],
-        n_results=k
+        n_results=k,
+        include=["documents", "distances"]
     )
 
-    print("DEBUG RESULTS:", results)
+    docs = results["documents"][0]
+    distances = results["distances"][0]
 
-    return results["documents"][0]
+    # Return (doc, distance) tuples — lower distance = more similar
+    return list(zip(docs, distances))
