@@ -37,7 +37,7 @@ st.markdown("""
     }
 
     .block-container {
-        padding-top: 2rem;
+        padding-top: 0rem;
         padding-bottom: 160px !important;
     }
 
@@ -55,7 +55,7 @@ st.markdown("""
         align-items: stretch;
         -webkit-box-pack: start;
         justify-content: start;
-        padding-top: 3rem;
+        padding-top: 0rem;
     }
 
     h1, h2, h3 {
@@ -147,18 +147,36 @@ st.markdown("""
 
     /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
+        position: sticky;
+        top: 15px;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(16px);
+        z-index: 1000;
+        margin: 60px auto 20px auto;
+        padding: 5px 40px;
+        display: flex;
+        justify-content: center;
+        width: fit-content;
+        border: 1px solid var(--glass-border);
+        border-radius: 50px;
+        gap: 80px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
     }
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
+        height: 55px;
         background-color: transparent !important;
         border: none !important;
-        font-weight: 600;
-        font-size: 16px;
+        font-weight: 700;
+        font-size: 22px;
+        transition: all 0.3s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #818cf8 !important;
+        transform: translateY(-2px);
     }
     .stTabs [aria-selected="true"] {
         color: #818cf8 !important;
-        border-bottom: 2px solid #818cf8 !important;
+        border-bottom: 3px solid #818cf8 !important;
     }
 
     /* Sticky Sidebar Footer */
@@ -314,8 +332,6 @@ with tab1:
                     else:
                         # Continue displaying the stream
                         placeholder.markdown(full_content)
-                    
-                    time.sleep(0.01)
 
             # Final processing after stream ends
             if "__OBSERVABILITY_START__" in full_content:
@@ -396,6 +412,29 @@ with tab3:
         hybrid = f2.toggle("Hybrid Search", value=config.get("enable_hybrid", True))
         multi_hop = f3.toggle("Multi-Hop Reason", value=config.get("enable_multi_hop", True))
         fallback = f4.toggle("Parametric Fallback", value=config.get("enable_fallback", True))
+
+        st.markdown("### 🖥️ Hardware & Fallback Tuning")
+        st.caption("Optimized for CPU-only environments (no GPU). Adjust thresholds to balance speed vs. quality.")
+        h1, h2, h3 = st.columns(3)
+        low_resource = h1.toggle(
+            "Low Resource Mode",
+            value=config.get("low_resource_mode", True),
+            help="Reduces Reranker candidate cap from 20 → 5 to save CPU cycles."
+        )
+        min_relevance = h2.slider(
+            "Min Relevance Threshold",
+            min_value=0.0, max_value=1.0,
+            value=float(config.get("min_relevance_threshold", 0.15)),
+            step=0.01,
+            help="Reranker score below this → skip RAG LLM call & go straight to fallback."
+        )
+        max_distance = h3.slider(
+            "Max Retrieval Distance",
+            min_value=0.5, max_value=3.0,
+            value=float(config.get("max_retrieval_distance", 1.5)),
+            step=0.1,
+            help="Chroma L2 distance above this → document is too far from query (filtered out)."
+        )
         
         if st.button("Apply Changes", type="primary"):
             update_config({
@@ -406,7 +445,10 @@ with tab3:
                 "use_reranker": use_reranker,
                 "enable_hybrid": hybrid,
                 "enable_multi_hop": multi_hop,
-                "enable_fallback": fallback
+                "enable_fallback": fallback,
+                "low_resource_mode": low_resource,
+                "min_relevance_threshold": min_relevance,
+                "max_retrieval_distance": max_distance,
             })
     else:
         st.warning("Could not fetch system configuration.")
