@@ -28,7 +28,7 @@ from evaluation.rag_evaluator import evaluate_rag
 # ----------------------------------
 
 def normalize_documents(retrieved_docs):
-
+    """Extract clean text from (doc, score) tuples or raw strings."""
     clean_docs = []
 
     for doc in retrieved_docs:
@@ -40,6 +40,12 @@ def normalize_documents(retrieved_docs):
             clean_docs.append(str(doc))
 
     return clean_docs
+
+
+def get_min_distance(scored_docs):
+    """Return the minimum (best) L2 distance from a list of (doc, distance) tuples."""
+    distances = [dist for _, dist in scored_docs if isinstance(dist, (int, float))]
+    return min(distances) if distances else float("inf")
 
 
 # ----------------------------------
@@ -171,16 +177,17 @@ def rag_pipeline(question):
     print("🔎 [STEP 4] Executing Hybrid Search...")
     tracker.start("retrieval")
 
-    all_docs = []
+    all_docs = []         # plain text docs
+    all_scored_raw = []   # (doc, distance) tuples for quality checks
 
     for sub_q in sub_queries:
-        docs = hybrid_search(
+        scored_results = hybrid_search(
             sub_q,
             query_analysis=query_analysis,
             top_k=top_k
         )
-        docs = normalize_documents(docs)
-        all_docs.extend(docs)
+        all_scored_raw.extend(scored_results)
+        all_docs.extend(normalize_documents(scored_results))
 
     tracker.end("retrieval")
     print(f"   📥 Retrieved {len(all_docs)} raw documents from Vector store.")
@@ -247,6 +254,60 @@ def rag_pipeline(question):
     clean_reranked = [(doc, float(score)) for doc, score in reranked]
     reranked_docs = [doc for doc, _ in clean_reranked]
     tracker.end("rerank")
+
+    # ----------------------------------
+    # 🔥 EARLY FALLBACK: Score Quality Gate
+    # ----------------------------------
+    min_relevance = config_cp.get("min_relevance_threshold", 0.15)
+    top_rerank_score = clean_reranked[0][1] if clean_reranked else 0.0
+
+    if top_rerank_score < min_relevance:
+        print(f"\n⚡ [EARLY FALLBACK] Top reranker score ({top_rerank_score:.3f}) "
+              f"< threshold ({min_relevance}). Docs are irrelevant — skipping RAG LLM call.")
+        print("   🔄 Jumping directly to Parametric Intelligence...")
+
+        tracker.start("llm")
+        memory_context = retrieve_memory(question)
+        context = "\n".join(memory_context)
+
+        answer = generate_answer(
+            context=context,
+            question=question,
+            model=model,
+            query_type=query_analysis.get("type", "general"),
+            query_analysis=query_analysis
+        )
+        tracker.end("llm")
+
+        confidence = compute_confidence(
+            clean_reranked=[],
+            top_k=0,
+            memory_context=memory_context,
+            query_analysis=query_analysis,
+            evaluation_scores=None,
+            answer=answer
+        )
+        total_latency = time.time() - start_time
+
+        observability = {
+            "mode": "EARLY_FALLBACK_LLM",
+            "model_used": model,
+            "query_analysis": query_analysis,
+            "early_fallback_reason": f"Reranker score {top_rerank_score:.3f} < threshold {min_relevance}",
+            "latency": {
+                **tracker.get_all(),
+                "total_seconds": total_latency
+            },
+            "confidence": confidence
+        }
+
+        final_response = (answer, observability)
+        if query_analysis.get("type") != "coding":
+            set_cache(question, final_response)
+        store_memory(question, answer, confidence)
+
+        print("✅ Pipeline Complete (Early Fallback).\n")
+        return final_response
 
     final_docs = reranked_docs[:top_k]
     print(f"   🎯 Highest quality chunks isolated (Top K = {top_k})")
