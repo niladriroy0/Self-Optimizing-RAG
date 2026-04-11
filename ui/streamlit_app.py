@@ -89,7 +89,6 @@ if question:
                 else:
                     generated_text += text
                     placeholder.markdown(generated_text)
-                    time.sleep(0.01)
 
         placeholder.empty()
 
