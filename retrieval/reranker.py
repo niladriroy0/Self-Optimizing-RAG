@@ -1,9 +1,11 @@
 from sentence_transformers import CrossEncoder
+from control_plane.config_manager import config_manager
 import math
 
 model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
-MAX_RERANK = 20   # cap
+MAX_RERANK_NORMAL = 20       # default candidate cap
+MAX_RERANK_LOW_RESOURCE = 5  # CPU-only cap (4x faster)
 
 
 def softmax(scores):
@@ -19,6 +21,10 @@ def rerank(query, docs, top_k=3):
     if not docs:
         return []
 
+    # 🔥 Respect low_resource_mode for CPU-only machines
+    low_resource = config_manager.get_param("low_resource_mode", False)
+    max_rerank = MAX_RERANK_LOW_RESOURCE if low_resource else MAX_RERANK_NORMAL
+
     # ----------------------------------
     # 🔥 Remove duplicates (IMPORTANT)
     # ----------------------------------
@@ -27,9 +33,9 @@ def rerank(query, docs, top_k=3):
     # ----------------------------------
     # 🔥 Limit candidates
     # ----------------------------------
-    docs = docs[:MAX_RERANK]
+    docs = docs[:max_rerank]
 
-    print("Reranker candidates:", len(docs))
+    print(f"Reranker candidates: {len(docs)} (low_resource_mode={low_resource})")
 
     pairs = [(query, doc) for doc in docs]
 
