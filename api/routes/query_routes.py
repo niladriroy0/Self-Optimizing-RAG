@@ -37,7 +37,6 @@ def stream_response(answer, observability):
 
     for word in words:
         yield word + " "
-        time.sleep(0.02)
 
     # ----------------------------------
     # 🔥 Attach observability
