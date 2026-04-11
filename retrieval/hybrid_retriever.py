@@ -18,10 +18,13 @@ def hybrid_search(query, query_analysis=None, top_k=3):
     keyword_weight = config_manager.get_param("keyword_weight", 0.5)
     semantic_weight = config_manager.get_param("semantic_weight", 0.5)
 
+    # 🔥 Max L2 distance to accept (lower = stricter). Chroma L2 ~0-4 range.
+    max_distance = config_manager.get_param("max_retrieval_distance", 1.5)
+
     needs_keyword = query_analysis.get("needs_keyword", False)
     needs_semantic = query_analysis.get("needs_semantic", True)
 
-    results = []
+    results = []  # list of (doc, distance)
 
     # ----------------------------------
     # VECTOR SEARCH
@@ -34,12 +37,14 @@ def hybrid_search(query, query_analysis=None, top_k=3):
         vector_results = []
 
     # ----------------------------------
-    # KEYWORD SEARCH
+    # KEYWORD SEARCH — wrap in tuples
     # ----------------------------------
 
     if use_hybrid and needs_keyword:
         keyword_k = max(1, int(top_k * keyword_weight * 3))
-        keyword_results = keyword_search(query, k=keyword_k)
+        raw_keyword = keyword_search(query, k=keyword_k)
+        # BM25 has no meaningful distance; assign a neutral score of 0.5
+        keyword_results = [(doc, 0.5) for doc in raw_keyword]
     else:
         keyword_results = []
 
@@ -56,18 +61,29 @@ def hybrid_search(query, query_analysis=None, top_k=3):
 
     seen = set()
 
-    def add_unique(docs):
-        for d in docs:
-            key = str(d)  # safe fallback
+    def add_unique(docs_with_scores):
+        for doc, dist in docs_with_scores:
+            key = str(doc)
             if key not in seen:
                 seen.add(key)
-                results.append(d)
+                results.append((doc, dist))
 
     add_unique(vector_results)
     add_unique(keyword_results)
 
     # ----------------------------------
-    # FINAL TRIM (NO RERANK HERE)
+    # 🔥 FILTER WEAK RESULTS
     # ----------------------------------
 
-    return results[: max(top_k * 5, 20)]
+    filtered = [(doc, dist) for doc, dist in results if dist <= max_distance]
+
+    # If filtering removed everything, fall back to returning all results
+    # so the pipeline can still make a decision (and use the early fallback path)
+    if not filtered:
+        filtered = results
+
+    # ----------------------------------
+    # FINAL TRIM
+    # ----------------------------------
+
+    return filtered[: max(top_k * 5, 20)]
